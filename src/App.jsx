@@ -77,6 +77,19 @@ function slugify(value) {
     .replace(/-{2,}/g, "-");
 }
 
+function splitKeywords(value) {
+  return String(value || "")
+    .split(/[,\n]/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function matchesKeyword(value, keywords) {
+  if (!keywords.length) return true;
+  const source = String(value || "").toLowerCase();
+  return keywords.some((keyword) => source.includes(keyword));
+}
+
 const EXTRA_PAGES = [
   {
     id: "R-STK-101",
@@ -121,7 +134,66 @@ const EXTRA_PAGES = [
   },
 ];
 
-const DOC_PAGES = [...pageSpecs.pages, ...EXTRA_PAGES].map((page, index) => {
+const SELLMATE_PAGES = [
+  {
+    id: "SM-STK-201",
+    code: "SM-STK-201",
+    title: "품목별 재고 목록",
+    pageTitle: "품목별 재고 목록",
+    docPath: "재고/품목별재고목록_상세분석.md",
+    menuGroup: "재고 (Sellmate)",
+    purpose: "품목(재고) 단위로 재고 상태(가용/예약/불량/검수대기/특수)와 Zone 분포를 통합 조회하는 화면",
+    fields: [],
+    actions: ["검색", "검색 초기화", "엑셀 다운로드", "활용 TIP"],
+    columnTables: [],
+    summaries: [],
+    apis: [],
+  },
+  {
+    id: "SM-STK-202",
+    code: "SM-STK-202",
+    title: "품목 바코드 출력",
+    pageTitle: "품목 바코드 출력",
+    docPath: "재고/품목바코드출력_상세분석.md",
+    menuGroup: "재고 (Sellmate)",
+    purpose: "화주/품목 조건으로 출력 대상을 선택해 바코드 라벨을 인쇄하는 화면",
+    fields: [],
+    actions: ["검색", "검색 초기화", "출력", "출력 템플릿 관리"],
+    columnTables: [],
+    summaries: [],
+    apis: [],
+  },
+  {
+    id: "SM-STK-203",
+    code: "SM-STK-203",
+    title: "로케이션별 재고 목록",
+    pageTitle: "로케이션별 재고 목록",
+    docPath: "재고/로케이션별재고목록_상세분석.md",
+    menuGroup: "재고 (Sellmate)",
+    purpose: "로케이션(Zone + 위치) 단위로 재고를 상세 조회하고 유통기한/로트/공급처를 함께 확인하는 화면",
+    fields: [],
+    actions: ["검색", "검색 초기화", "엑셀 다운로드", "활용 TIP"],
+    columnTables: [],
+    summaries: [],
+    apis: [],
+  },
+  {
+    id: "SM-STK-204",
+    code: "SM-STK-204",
+    title: "입출고 및 이동 내역",
+    pageTitle: "입출고 및 이동 내역",
+    docPath: "재고/입출고및이동내역.md",
+    menuGroup: "재고 이동 (Sellmate)",
+    purpose: "입출고/이동/반품/조정 이력 조회와 이동 오더·지시·실행·임의이동 흐름을 통합 데모로 제공",
+    fields: [],
+    actions: ["검색", "검색 초기화", "엑셀 다운로드"],
+    columnTables: [],
+    summaries: [],
+    apis: [],
+  },
+];
+
+const DOC_PAGES = [...pageSpecs.pages, ...EXTRA_PAGES, ...SELLMATE_PAGES].map((page, index) => {
   const baseId = page.code || page.id || `PAGE-${String(index + 1).padStart(3, "0")}`;
   return {
     ...page,
@@ -268,7 +340,7 @@ function SidebarNav({ showDocLinks, currentDocKey }) {
 
         {showDocLinks ? (
           <div className="menu-group docs-menu">
-            <div className="menu-title">재고2 데모 링크</div>
+            <div className="menu-title">재고 문서 데모 링크</div>
             <NavLink to="/docs" className={({ isActive }) => `menu-item ${isActive && location.pathname === "/docs" ? "active" : ""}`}>
               문서 전체 목록
             </NavLink>
@@ -329,14 +401,14 @@ function BaseInventoryPage() {
       <div className="page-head">
         <h1>재고 현황</h1>
         <div className="head-actions">
-          <Link to="/docs" className="chip">문서2 데모 전체</Link>
+          <Link to="/docs" className="chip">문서 데모 전체</Link>
           <button type="button" className="text-btn">재고관리자</button>
           <button type="button" className="text-btn">재고 갱신</button>
         </div>
       </div>
 
       <section className="quick-links">
-        <h2>재고2 문서 페이지 바로가기 ({DOC_PAGES.length}개)</h2>
+        <h2>재고 문서 페이지 바로가기 ({DOC_PAGES.length}개)</h2>
         <div className="quick-grid">
           <Link to="/docs">전체 목록 보기</Link>
           {DOC_PAGES.map((page) => (
@@ -544,9 +616,9 @@ function BaseInventoryPage() {
 
 function DocsIndexPage() {
   return (
-    <PageLayout tabTitle="재고2 문서 데모" showDocLinks>
+    <PageLayout tabTitle="재고 문서 데모" showDocLinks>
       <div className="page-head">
-        <h1>재고2 문서 데모 목록</h1>
+        <h1>재고 문서 데모 목록</h1>
         <div className="head-actions">
           <Link to="/" className="chip">재고현황 기본으로</Link>
         </div>
@@ -805,11 +877,43 @@ function IndividualInboundDoc({ page }) {
 function BarcodeInboundDoc({ page }) {
   const { toast, showToast } = useToast();
   const columns = page.columnTables?.[0]?.columns?.length ? page.columnTables[0].columns : [];
+  const ownerOptions = ["원차일드", "onedns_test", "테스트", "안나랜모드"];
+  const [selectedOwners, setSelectedOwners] = useState(() => new Set());
   const [scanMode, setScanMode] = useState("자동");
   const [scanValue, setScanValue] = useState("");
-  const [rows, setRows] = useState(() => buildRows(columns, 4));
+  const [rows, setRows] = useState(() =>
+    buildRows(columns, 4).map((row, index) => ({
+      ...row,
+      __id: `scan-init-${index + 1}`,
+      화주사: ownerOptions[index % ownerOptions.length],
+      품목코드: row.품목코드 || `JT00${9301 + index}`,
+    })),
+  );
+  const [selectedRows, setSelectedRows] = useState(() => new Set());
+
+  const toggleOwner = (owner) => {
+    setSelectedOwners((prev) => {
+      const next = new Set(prev);
+      if (next.has(owner)) next.delete(owner);
+      else next.add(owner);
+      return next;
+    });
+  };
+
+  const filteredRows = useMemo(() => {
+    if (!selectedOwners.size) return [];
+    return rows.filter((row) => selectedOwners.has(row.화주사));
+  }, [rows, selectedOwners]);
+
+  const selectedCount = filteredRows.filter((row) => selectedRows.has(row.__id)).length;
+  const displayColumns = ["선택", ...columns];
+  const displayRows = filteredRows.map((row) => ({ ...row, 선택: selectedRows.has(row.__id) ? "☑" : "☐" }));
 
   const addScan = () => {
+    if (!selectedOwners.size) {
+      showToast("화주사를 먼저 선택하세요.");
+      return;
+    }
     const value = scanValue.trim();
     if (!value) return;
     const row = { __id: `scan-${Date.now()}` };
@@ -819,6 +923,7 @@ function BarcodeInboundDoc({ page }) {
       else if (/입력방식|스캔/.test(column)) row[column] = scanMode;
       else row[column] = sampleValue(column, index + 3);
     });
+    row.화주사 = [...selectedOwners][0];
     setRows((prev) => [row, ...prev]);
     setScanValue("");
     showToast(`스캔 등록: ${value}`);
@@ -827,11 +932,30 @@ function BarcodeInboundDoc({ page }) {
   return (
     <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
       <DocHeaderBlock page={page} />
-      <DocFilterBlock page={page} helperText="헤더 설정 + 스캔 누적 처리" onSearch={() => showToast("검색 실행")} onReset={() => showToast("초기화")} />
+      <DocFilterBlock
+        page={page}
+        helperText="화주사 선택 후 조회/선택/출력하는 바코드 작업 흐름"
+        onSearch={() => showToast(selectedOwners.size ? `조회 결과 ${filteredRows.length}건` : "화주사를 선택하세요.")}
+        onReset={() => {
+          setSelectedOwners(new Set());
+          setSelectedRows(new Set());
+          setScanValue("");
+          showToast("초기화");
+        }}
+      >
+        <div className="owner-checks">
+          {ownerOptions.map((owner) => (
+            <label key={owner}>
+              <input type="checkbox" checked={selectedOwners.has(owner)} onChange={() => toggleOwner(owner)} />
+              {owner}
+            </label>
+          ))}
+        </div>
+      </DocFilterBlock>
 
       <section className="special-panel">
         <h3>스캔 입력 영역</h3>
-        <p>자동 모드/수동 모드에 따라 바코드 입력 이벤트를 처리합니다.</p>
+        <p>자동/수동 스캔 입력과 선택 출력 흐름을 함께 데모합니다.</p>
         <div className="mode-toggle">
           {["자동", "수동"].map((mode) => (
             <button
@@ -860,15 +984,30 @@ function BarcodeInboundDoc({ page }) {
 
       <DocSummaryCards
         items={[
-          { name: "총 스캔 건수", value: formatNumber(rows.length), description: "누적 스캔 처리 건수" },
-          { name: "정상 건수", value: formatNumber(Math.max(rows.length - 1, 0)), description: "상품 매칭 성공 건" },
-          { name: "오류 건수", value: "1", description: "미등록 바코드/중복 경고" },
+          { name: "총 조회 건수", value: formatNumber(filteredRows.length), description: "화주사 선택 기준" },
+          { name: "선택 건수", value: formatNumber(selectedCount), description: "출력 대상 선택 건수" },
+          { name: "누적 스캔 건수", value: formatNumber(rows.length), description: "전체 스캔 누적" },
         ]}
       />
 
       <section className="table-toolbar doc-toolbar">
-        <div className="count-info">스캔 누적 목록 <strong>{formatNumber(rows.length)}건</strong></div>
+        <div className="count-info">스캔 누적 목록 <strong>{formatNumber(filteredRows.length)}건</strong> / <strong>{formatNumber(selectedCount)}건 선택</strong></div>
         <div className="toolbar-actions">
+          <button type="button" className="chip" onClick={() => setSelectedRows(new Set(filteredRows.map((row) => row.__id)))}>
+            전체 선택
+          </button>
+          <button type="button" className="chip" onClick={() => setSelectedRows(new Set())}>선택 해제</button>
+          <button
+            type="button"
+            className="primary"
+            disabled={selectedCount === 0}
+            onClick={() => showToast(`${selectedCount}건 바코드 출력 실행`)}
+          >
+            출력
+          </button>
+          <button type="button" className="chip" onClick={() => showToast("출력 템플릿 관리 화면으로 이동")}>
+            출력 템플릿 관리
+          </button>
           {page.actions.map((action) => (
             <button key={action} type="button" className="chip" onClick={() => showToast(`${action} 실행`)}>
               {action}
@@ -876,7 +1015,22 @@ function BarcodeInboundDoc({ page }) {
           ))}
         </div>
       </section>
-      <DocTableBlock columns={columns} rows={rows} />
+      {!selectedOwners.size ? (
+        <div className="empty-state bordered">데이터를 불러오기 위해, 검색 조건(화주사) 설정이 필요합니다.</div>
+      ) : (
+        <DocTableBlock
+          columns={displayColumns}
+          rows={displayRows}
+          onRowClick={(row) => {
+            setSelectedRows((prev) => {
+              const next = new Set(prev);
+              if (next.has(row.__id)) next.delete(row.__id);
+              else next.add(row.__id);
+              return next;
+            });
+          }}
+        />
+      )}
 
       <DocMetaBlock page={page} toast={toast} />
     </PageLayout>
@@ -1002,6 +1156,8 @@ function RegisteredProductsDoc({ page }) {
   const [uploadedCodes, setUploadedCodes] = useState([]);
   const [uploadMeta, setUploadMeta] = useState("업로드된 파일 없음");
   const [rows, setRows] = useState([]);
+  const [rowsPerPage, setRowsPerPage] = useState("50");
+  const [pageNo, setPageNo] = useState(1);
 
   const primaryColumns = page.columnTables?.[0]?.columns?.length ? page.columnTables[0].columns : [];
   const summaryNames = page.summaries?.[0]?.items?.map((item) => item.name) || [
@@ -1060,12 +1216,21 @@ function RegisteredProductsDoc({ page }) {
     }
 
     setRows(buildResultRows(inputs));
+    setPageNo(1);
     showToast(`조회 완료: ${inputs.length}건`);
   };
 
   const inputCount = rows.length;
   const matchCount = rows.filter((row) => row["매칭 여부"] === "매칭됨").length;
   const unregisteredCount = inputCount - matchCount;
+  const pageSize = Number(rowsPerPage);
+  const totalPage = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePageNo = Math.min(pageNo, totalPage);
+  const visibleRows = rows.slice((safePageNo - 1) * pageSize, safePageNo * pageSize);
+
+  useEffect(() => {
+    if (pageNo !== safePageNo) setPageNo(safePageNo);
+  }, [pageNo, safePageNo]);
 
   return (
     <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
@@ -1175,7 +1340,22 @@ function RegisteredProductsDoc({ page }) {
       </div>
 
       <section className="table-toolbar doc-toolbar">
-        <div className="count-info">조회 결과 <strong>{formatNumber(rows.length)}건</strong></div>
+        <div className="count-info">조회 결과 <strong>{formatNumber(rows.length)}건</strong> (페이지 {safePageNo}/{totalPage})</div>
+        <div className="toolbar-actions">
+          <button
+            type="button"
+            className="chip"
+            onClick={() => showToast("TIP: 품목명 링크를 클릭하면 상세 재고 화면으로 이동합니다.")}
+          >
+            활용 TIP
+          </button>
+          <select value={rowsPerPage} onChange={(event) => setRowsPerPage(event.target.value)}>
+            <option value="50">50개씩 보기</option>
+            <option value="100">100개씩 보기</option>
+            <option value="150">150개씩 보기</option>
+            <option value="200">200개씩 보기</option>
+          </select>
+        </div>
       </section>
       <div className="doc-table-wrap">
         {rows.length ? (
@@ -1188,11 +1368,21 @@ function RegisteredProductsDoc({ page }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.__id}>
-                  {primaryColumns.map((column) => (
-                    <td key={`${row.__id}-${column}`}>{row[column] || "-"}</td>
-                  ))}
+                  {primaryColumns.map((column) => {
+                    const cell = row[column] || "-";
+                    if (column === "상품명" && cell !== "-") {
+                      return (
+                        <td key={`${row.__id}-${column}`}>
+                          <button type="button" className="link-btn" onClick={() => showToast(`${cell} 상세 이동`)}>
+                            {cell}
+                          </button>
+                        </td>
+                      );
+                    }
+                    return <td key={`${row.__id}-${column}`}>{cell}</td>;
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -1201,6 +1391,13 @@ function RegisteredProductsDoc({ page }) {
           <div className="empty-state">조회 버튼을 눌러 결과를 확인하세요.</div>
         )}
       </div>
+      {rows.length ? (
+        <div className="pager-inline">
+          <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.max(1, prev - 1))}>이전</button>
+          <span>{safePageNo} / {totalPage}</span>
+          <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.min(totalPage, prev + 1))}>다음</button>
+        </div>
+      ) : null}
 
       <section className="doc-meta">
         <strong>원본 문서</strong>
@@ -2411,37 +2608,194 @@ function SlowMovingStockDoc({ page }) {
 function LocationAvailabilityDoc({ page }) {
   const { toast, showToast } = useToast();
   const columns = page.columnTables?.[0]?.columns?.length ? page.columnTables[0].columns : [];
-  const [rows] = useState(() =>
-    buildRows(columns, 12).map((row, index) => ({
-      ...row,
-      __id: `loc-${index + 1}`,
-      가용재고: formatNumber(100 + index * 3),
-      예약재고: formatNumber(15 + index),
-      불용재고: formatNumber(index % 3),
-      총재고: formatNumber(115 + index * 4),
-      로케이션: `${String.fromCharCode(65 + (index % 6))}-0${(index % 8) + 1}-0${(index % 5) + 1}`,
-    })),
-  );
+  const [rows] = useState(() => ([
+    {
+      __id: "loc-001",
+      창고: "메인센터",
+      "존(Zone)": "보관 존",
+      로케이션: "A-01-01",
+      "로케이션 타입": "랙",
+      화주사: "onedns_test",
+      브랜드: "MADE J",
+      카테고리: "상의",
+      상품코드: "JT009301",
+      바코드: "81231341295121",
+      스타일코드: "JB003-KN01",
+      색상: "블랙",
+      사이즈: "M",
+      상품명: "[MADE] 데모 니트",
+      가용재고: "180",
+      예약재고: "12",
+      불용재고: "2",
+      총재고: "194",
+      "최초 입고일": "2025-11-20",
+      "마지막 입고일": "2026-02-21",
+      "마지막 출고일": "2026-03-02",
+      보관일수: "104",
+      상태: "가용",
+    },
+    {
+      __id: "loc-002",
+      창고: "메인센터",
+      "존(Zone)": "보관 존",
+      로케이션: "A-01-02",
+      "로케이션 타입": "랙",
+      화주사: "onedns_test",
+      브랜드: "MADE J",
+      카테고리: "하의",
+      상품코드: "JT009302",
+      바코드: "81231341295122",
+      스타일코드: "JB003-KN02",
+      색상: "오프화이트",
+      사이즈: "L",
+      상품명: "[MADE] 데모 팬츠",
+      가용재고: "140",
+      예약재고: "9",
+      불용재고: "1",
+      총재고: "150",
+      "최초 입고일": "2025-11-22",
+      "마지막 입고일": "2026-02-25",
+      "마지막 출고일": "2026-03-02",
+      보관일수: "100",
+      상태: "가용",
+    },
+    {
+      __id: "loc-003",
+      창고: "메인센터",
+      "존(Zone)": "입고 존",
+      로케이션: "rcv_conf",
+      "로케이션 타입": "검수",
+      화주사: "테스트",
+      브랜드: "NATURIA",
+      카테고리: "아우터",
+      상품코드: "JT009303",
+      바코드: "81231341295123",
+      스타일코드: "JB003-KN03",
+      색상: "레드",
+      사이즈: "S",
+      상품명: "[NATURIA] 데모 자켓",
+      가용재고: "0",
+      예약재고: "0",
+      불용재고: "0",
+      총재고: "44",
+      "최초 입고일": "2026-02-28",
+      "마지막 입고일": "2026-03-03",
+      "마지막 출고일": "-",
+      보관일수: "4",
+      상태: "검수 대기",
+    },
+    {
+      __id: "loc-004",
+      창고: "서브센터",
+      "존(Zone)": "뮬랑",
+      로케이션: "C-01-01",
+      "로케이션 타입": "랙",
+      화주사: "원차일드",
+      브랜드: "VINTAGE LAB",
+      카테고리: "상의",
+      상품코드: "JT009304",
+      바코드: "81231341295124",
+      스타일코드: "JB003-KN04",
+      색상: "그린",
+      사이즈: "XL",
+      상품명: "[VINTAGE] 데모 셔츠",
+      가용재고: "102",
+      예약재고: "6",
+      불용재고: "0",
+      총재고: "108",
+      "최초 입고일": "2025-12-03",
+      "마지막 입고일": "2026-02-19",
+      "마지막 출고일": "2026-03-01",
+      보관일수: "91",
+      상태: "가용",
+    },
+  ]));
+  const [useZoneFilter, setUseZoneFilter] = useState(false);
+  const [zoneFilter, setZoneFilter] = useState("보관 존");
+  const [useStatusFilter, setUseStatusFilter] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("가용");
+  const [rowsPerPage, setRowsPerPage] = useState("50");
+  const [pageNo, setPageNo] = useState(1);
   const [selectedId, setSelectedId] = useState("");
 
-  const selectedRow = rows.find((row) => row.__id === selectedId);
+  const filteredRows = useMemo(() => rows
+    .filter((row) => (!useZoneFilter || row["존(Zone)"] === zoneFilter) && (!useStatusFilter || row.상태 === statusFilter))
+    .sort((a, b) => String(a.로케이션).localeCompare(String(b.로케이션))), [rows, useZoneFilter, zoneFilter, useStatusFilter, statusFilter]);
+
+  const pageSize = Number(rowsPerPage);
+  const totalPage = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const safePageNo = Math.min(pageNo, totalPage);
+  const visibleRows = filteredRows.slice((safePageNo - 1) * pageSize, safePageNo * pageSize);
+  const selectedRow = visibleRows.find((row) => row.__id === selectedId) || filteredRows.find((row) => row.__id === selectedId);
+
+  const summary = useMemo(() => {
+    const total = filteredRows.reduce((sum, row) => sum + Number(String(row.총재고 || "0").replace(/,/g, "")), 0);
+    const reserved = filteredRows.reduce((sum, row) => sum + Number(String(row.예약재고 || "0").replace(/,/g, "")), 0);
+    return { total, reserved };
+  }, [filteredRows]);
+
+  useEffect(() => {
+    if (pageNo !== safePageNo) setPageNo(safePageNo);
+  }, [pageNo, safePageNo]);
 
   return (
     <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
       <DocHeaderBlock page={page} />
-      <DocFilterBlock page={page} helperText="로케이션별 가용/예약/불용 조회" onSearch={() => showToast("검색 실행")} onReset={() => showToast("초기화")} />
+      <DocFilterBlock
+        page={page}
+        helperText="로케이션명 오름차순 기본 정렬 / Zone·상태 추가 필터 지원"
+        onSearch={() => showToast(`조회 결과 ${filteredRows.length}건`)}
+        onReset={() => {
+          setUseZoneFilter(false);
+          setZoneFilter("보관 존");
+          setUseStatusFilter(false);
+          setStatusFilter("가용");
+          setRowsPerPage("50");
+          setPageNo(1);
+          showToast("초기화");
+        }}
+      >
+        <div className="mode-toggle">
+          <button type="button" className={`chip ${useZoneFilter ? "active-mode" : ""}`} onClick={() => setUseZoneFilter((prev) => !prev)}>
+            + 필터추가: Zone
+          </button>
+          <button type="button" className={`chip ${useStatusFilter ? "active-mode" : ""}`} onClick={() => setUseStatusFilter((prev) => !prev)}>
+            + 필터추가: 상태
+          </button>
+        </div>
+        {(useZoneFilter || useStatusFilter) ? (
+          <div className="filter-grid">
+            {useZoneFilter ? (
+              <label>
+                Zone
+                <select value={zoneFilter} onChange={(event) => setZoneFilter(event.target.value)}>
+                  {["입고 존", "보관 존", "뮬랑"].map((item) => <option key={item}>{item}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {useStatusFilter ? (
+              <label>
+                상태
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  {["가용", "검수 대기"].map((item) => <option key={item}>{item}</option>)}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+      </DocFilterBlock>
 
       <DocSummaryCards
         items={[
-          { name: "총 사용 로케이션 수", value: formatNumber(86), description: "재고 보관중 로케이션" },
-          { name: "총 가용재고", value: formatNumber(8230), description: "즉시 출고 가능 수량" },
-          { name: "총 불용재고", value: formatNumber(132), description: "파손/불량 처리 수량" },
+          { name: "총 사용 로케이션 수", value: formatNumber(filteredRows.length), description: "재고 보관중 로케이션" },
+          { name: "총 재고", value: formatNumber(summary.total), description: "예약 포함 수량" },
+          { name: "총 예약재고", value: formatNumber(summary.reserved), description: `가용 계산값 ${formatNumber(summary.total - summary.reserved)}` },
         ]}
       />
 
       <section className="special-panel">
         <h3>로케이션 상세</h3>
-        <p>행 선택 시 해당 로케이션의 상세 정보를 확인합니다.</p>
+        <p>행 선택 시 해당 로케이션의 상세 정보를 확인합니다. 총 재고는 예약 재고를 포함한 수량입니다.</p>
         <div className="entry-row">
           <span>선택 로케이션</span>
           <strong>{selectedRow?.로케이션 || "-"}</strong>
@@ -2453,16 +2807,30 @@ function LocationAvailabilityDoc({ page }) {
       </section>
 
       <section className="table-toolbar doc-toolbar">
-        <div className="count-info">위치별 재고 <strong>{formatNumber(rows.length)}건</strong></div>
+        <div className="count-info">위치별 재고 <strong>{formatNumber(filteredRows.length)}건</strong> (페이지 {safePageNo}/{totalPage})</div>
         <div className="toolbar-actions">
           {page.actions.map((action) => (
             <button key={action} type="button" className="chip" onClick={() => showToast(`${action} 실행`)}>
               {action}
             </button>
           ))}
+          <button type="button" className="chip" onClick={() => showToast("TIP: 목록은 로케이션명 기준 오름차순으로 표시됩니다.")}>
+            활용 TIP
+          </button>
+          <select value={rowsPerPage} onChange={(event) => setRowsPerPage(event.target.value)}>
+            <option value="50">50개씩 보기</option>
+            <option value="100">100개씩 보기</option>
+            <option value="150">150개씩 보기</option>
+            <option value="200">200개씩 보기</option>
+          </select>
         </div>
       </section>
-      <DocTableBlock columns={columns} rows={rows} selectedId={selectedId} onRowClick={(row) => setSelectedId(row.__id)} />
+      <DocTableBlock columns={columns} rows={visibleRows} selectedId={selectedId} onRowClick={(row) => setSelectedId(row.__id)} />
+      <div className="pager-inline">
+        <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.max(1, prev - 1))}>이전</button>
+        <span>{safePageNo} / {totalPage}</span>
+        <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.min(totalPage, prev + 1))}>다음</button>
+      </div>
 
       <DocMetaBlock page={page} toast={toast} />
     </PageLayout>
@@ -2472,12 +2840,13 @@ function LocationAvailabilityDoc({ page }) {
 function InOutListDoc({ page }) {
   const { toast, showToast } = useToast();
   const columns = page.columnTables?.[0]?.columns?.length ? page.columnTables[0].columns : [];
-  const [rows, setRows] = useState(() =>
+  const transactionTypes = ["전체", "입고", "출고", "이동", "반출", "B2B 반품", "B2C 반품", "조정"];
+  const [rows] = useState(() =>
     buildRows(columns, 12).map((row, index) => ({
       ...row,
       __id: `inout-${index + 1}`,
       입출고번호: `IO-202603-${String(index + 1).padStart(4, "0")}`,
-      "입출고 유형": index % 2 ? "입고" : "출고",
+      "입출고 유형": ["입고", "출고", "이동", "반출", "B2B 반품", "조정"][index % 6],
       화주사: ["화주사 A", "화주사 B"][index % 2],
       창고: ["메인센터", "서브센터"][index % 2],
       상품코드: `JT00${9300 + index}`,
@@ -2491,11 +2860,19 @@ function InOutListDoc({ page }) {
     })),
   );
   const [typeFilter, setTypeFilter] = useState("전체");
+  const [datePreset, setDatePreset] = useState("오늘");
+  const [useOrderFilter, setUseOrderFilter] = useState(false);
+  const [orderKeyword, setOrderKeyword] = useState("");
+  const [rowsPerPage, setRowsPerPage] = useState("50");
+  const [pageNo, setPageNo] = useState(1);
 
   const visibleRows = useMemo(() => {
-    if (typeFilter === "전체") return rows;
-    return rows.filter((row) => row["입출고 유형"] === typeFilter);
-  }, [rows, typeFilter]);
+    const keywords = splitKeywords(orderKeyword);
+    return rows.filter((row) => (
+      (typeFilter === "전체" || row["입출고 유형"] === typeFilter)
+      && (!useOrderFilter || matchesKeyword(`${row.입출고번호} ${row.메모 || ""}`, keywords))
+    ));
+  }, [rows, typeFilter, useOrderFilter, orderKeyword]);
 
   const summary = useMemo(() => {
     const inbound = visibleRows
@@ -2504,20 +2881,56 @@ function InOutListDoc({ page }) {
     const outbound = visibleRows
       .filter((row) => row["입출고 유형"] === "출고")
       .reduce((sum, row) => sum + Number(String(row.수량 || "0").replace(/,/g, "")), 0);
-    return { inbound, outbound };
+    const movement = visibleRows
+      .filter((row) => row["입출고 유형"] === "이동")
+      .reduce((sum, row) => sum + Number(String(row.수량 || "0").replace(/,/g, "")), 0);
+    return { inbound, outbound, movement };
   }, [visibleRows]);
+
+  const pageSize = Number(rowsPerPage);
+  const totalPage = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+  const safePageNo = Math.min(pageNo, totalPage);
+  const pagedRows = visibleRows.slice((safePageNo - 1) * pageSize, safePageNo * pageSize);
+
+  useEffect(() => {
+    if (pageNo !== safePageNo) setPageNo(safePageNo);
+  }, [pageNo, safePageNo]);
 
   return (
     <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
       <DocHeaderBlock page={page} />
       <DocFilterBlock
         page={page}
-        helperText="입고/출고 처리 내역 및 위치 변경 이력 조회"
-        onSearch={() => showToast("검색 실행")}
-        onReset={() => showToast("초기화")}
+        helperText="입출고 일자 기반 통합 조회 + 이동 관련 필터/흐름 보강"
+        onSearch={() => showToast(`조회 결과 ${visibleRows.length}건`)}
+        onReset={() => {
+          setTypeFilter("전체");
+          setDatePreset("오늘");
+          setUseOrderFilter(false);
+          setOrderKeyword("");
+          setRowsPerPage("50");
+          setPageNo(1);
+          showToast("초기화");
+        }}
       >
+        <div className="filter-grid">
+          <label>
+            입출고 일자 프리셋
+            <select value={datePreset} onChange={(event) => setDatePreset(event.target.value)}>
+              {["오늘", "지난 7일", "지난 30일", "사용자 지정(최대 90일)"].map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>시작일<input type="date" defaultValue="2026-03-01" /></label>
+          <label>종료일<input type="date" defaultValue="2026-03-03" /></label>
+          <label>
+            구분
+            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+              {transactionTypes.map((type) => <option key={type}>{type}</option>)}
+            </select>
+          </label>
+        </div>
         <div className="mode-toggle">
-          {["전체", "입고", "출고"].map((type) => (
+          {transactionTypes.slice(0, 4).map((type) => (
             <button
               key={type}
               type="button"
@@ -2527,28 +2940,1280 @@ function InOutListDoc({ page }) {
               {type}
             </button>
           ))}
+          <button
+            type="button"
+            className={`chip ${useOrderFilter ? "active-mode" : ""}`}
+            onClick={() => setUseOrderFilter((prev) => !prev)}
+          >
+            + 필터추가: 오더번호
+          </button>
+          <Link className="chip" to="/docs/sm-stk-204">이동 오더/지시/실행 상세</Link>
         </div>
+        {useOrderFilter ? (
+          <div className="filter-grid">
+            <label>
+              오더번호 키워드
+              <input
+                type="text"
+                value={orderKeyword}
+                onChange={(event) => setOrderKeyword(event.target.value)}
+                placeholder="이동 오더번호/입고 오더번호 등"
+              />
+            </label>
+          </div>
+        ) : null}
       </DocFilterBlock>
 
       <DocSummaryCards
         items={[
           { name: "총 입출고 건수", value: formatNumber(visibleRows.length), description: "조회 기간 내 처리 건수" },
           { name: "총 입고 수량", value: formatNumber(summary.inbound), description: "입고 수량 합계" },
-          { name: "총 출고 수량", value: formatNumber(summary.outbound), description: "출고 수량 합계" },
+          { name: "총 출고 수량", value: formatNumber(summary.outbound), description: `이동 수량 ${formatNumber(summary.movement)}` },
         ]}
       />
 
       <section className="table-toolbar doc-toolbar">
-        <div className="count-info">입출고 목록 <strong>{formatNumber(visibleRows.length)}건</strong></div>
+        <div className="count-info">입출고 목록 <strong>{formatNumber(visibleRows.length)}건</strong> (페이지 {safePageNo}/{totalPage})</div>
         <div className="toolbar-actions">
           {page.actions.map((action) => (
             <button key={action} type="button" className="chip" onClick={() => showToast(`${action} 실행`)}>
               {action}
             </button>
           ))}
+          <button type="button" className="chip" onClick={() => showToast("TIP: 구분을 '이동'으로 설정하면 이동 이력만 조회됩니다.")}>
+            활용 TIP
+          </button>
+          <select value={rowsPerPage} onChange={(event) => setRowsPerPage(event.target.value)}>
+            <option value="50">50개씩 보기</option>
+            <option value="100">100개씩 보기</option>
+            <option value="150">150개씩 보기</option>
+            <option value="200">200개씩 보기</option>
+          </select>
         </div>
       </section>
-      <DocTableBlock columns={columns} rows={visibleRows} />
+      <DocTableBlock columns={columns} rows={pagedRows} />
+      <div className="pager-inline">
+        <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.max(1, prev - 1))}>이전</button>
+        <span>{safePageNo} / {totalPage}</span>
+        <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.min(totalPage, prev + 1))}>다음</button>
+      </div>
+
+      <DocMetaBlock page={page} toast={toast} />
+    </PageLayout>
+  );
+}
+
+function ItemStockListSellmateDoc({ page }) {
+  const { toast, showToast } = useToast();
+  const ownerOptions = ["원차일드", "onedns_test", "테스트", "안나랜모드"];
+  const [selectedOwners, setSelectedOwners] = useState(() => new Set(["원차일드", "onedns_test"]));
+  const [itemCodeQuery, setItemCodeQuery] = useState("");
+  const [itemNameQuery, setItemNameQuery] = useState("");
+  const [attrQuery, setAttrQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState("asc");
+  const [zoneLayout, setZoneLayout] = useState("vertical");
+  const [rowsPerPage, setRowsPerPage] = useState("50");
+  const [pageNo, setPageNo] = useState(1);
+
+  const [rows] = useState([
+    { __id: "itm-001", 화주사: "원차일드", 품목등록일: "2026-02-20", 품목코드: "10000011", 품목명: "데모 베이직 반팔 니트", 품목속성: "Free", 총재고: 612, 가용: 560, 예약: 34, 불량: 8, 검수대기: 7, 특수: 3, zoneList: [["입고 존", 21], ["보관 존", 560], ["뮬랑", 31]] },
+    { __id: "itm-002", 화주사: "onedns_test", 품목등록일: "2026-02-22", 품목코드: "10000012", 품목명: "데모 소프트 후드 집업", 품목속성: "단일상품", 총재고: 380, 가용: 341, 예약: 25, 불량: 5, 검수대기: 6, 특수: 3, zoneList: [["입고 존", 18], ["보관 존", 317], ["뮬랑", 45]] },
+    { __id: "itm-003", 화주사: "테스트", 품목등록일: "2026-02-24", 품목코드: "10000013", 품목명: "데모 기모 조거 팬츠", 품목속성: "Free", 총재고: 501, 가용: 472, 예약: 16, 불량: 4, 검수대기: 5, 특수: 4, zoneList: [["입고 존", 15], ["보관 존", 452], ["뮬랑", 34]] },
+    { __id: "itm-004", 화주사: "안나랜모드", 품목등록일: "2026-02-25", 품목코드: "10000014", 품목명: "데모 울 라운드 니트", 품목속성: "단일상품", 총재고: 265, 가용: 242, 예약: 14, 불량: 3, 검수대기: 4, 특수: 2, zoneList: [["입고 존", 10], ["보관 존", 221], ["뮬랑", 34]] },
+    { __id: "itm-005", 화주사: "원차일드", 품목등록일: "2026-02-26", 품목코드: "10000015", 품목명: "데모 슬림 롱슬리브", 품목속성: "Free", 총재고: 913, 가용: 852, 예약: 41, 불량: 8, 검수대기: 7, 특수: 5, zoneList: [["입고 존", 26], ["보관 존", 827], ["뮬랑", 60]] },
+    { __id: "itm-006", 화주사: "onedns_test", 품목등록일: "2026-02-27", 품목코드: "10000016", 품목명: "데모 와이드 데님", 품목속성: "Free", 총재고: 458, 가용: 425, 예약: 21, 불량: 4, 검수대기: 5, 특수: 3, zoneList: [["입고 존", 17], ["보관 존", 399], ["뮬랑", 42]] },
+  ]);
+
+  const toggleOwner = (owner) => {
+    setSelectedOwners((prev) => {
+      const next = new Set(prev);
+      if (next.has(owner)) next.delete(owner);
+      else next.add(owner);
+      return next;
+    });
+    setPageNo(1);
+  };
+
+  const resetFilters = () => {
+    setSelectedOwners(new Set());
+    setItemCodeQuery("");
+    setItemNameQuery("");
+    setAttrQuery("");
+    setSortOrder("asc");
+    setZoneLayout("vertical");
+    setRowsPerPage("50");
+    setPageNo(1);
+    showToast("검색 조건을 초기화했습니다.");
+  };
+
+  const filteredRows = useMemo(() => {
+    const ownerKeywords = selectedOwners.size ? selectedOwners : new Set(ownerOptions);
+    const codeKeywords = splitKeywords(itemCodeQuery);
+    const nameKeywords = splitKeywords(itemNameQuery);
+    const attrKeywords = splitKeywords(attrQuery);
+    const list = rows.filter((row) => (
+      ownerKeywords.has(row.화주사)
+      && matchesKeyword(row.품목코드, codeKeywords)
+      && matchesKeyword(row.품목명, nameKeywords)
+      && matchesKeyword(row.품목속성, attrKeywords)
+    ));
+    return [...list].sort((a, b) => {
+      const dateA = new Date(a.품목등록일).getTime();
+      const dateB = new Date(b.품목등록일).getTime();
+      return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+    });
+  }, [rows, selectedOwners, ownerOptions, itemCodeQuery, itemNameQuery, attrQuery, sortOrder]);
+
+  const summary = useMemo(() => {
+    const totalStock = filteredRows.reduce((sum, row) => sum + row.총재고, 0);
+    const available = filteredRows.reduce((sum, row) => sum + row.가용, 0);
+    const pendingInspect = filteredRows.reduce((sum, row) => sum + row.검수대기, 0);
+    return { totalStock, available, pendingInspect };
+  }, [filteredRows]);
+
+  const pageSize = Number(rowsPerPage);
+  const totalPage = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const safePageNo = Math.min(pageNo, totalPage);
+  const visibleRows = filteredRows.slice((safePageNo - 1) * pageSize, safePageNo * pageSize);
+
+  useEffect(() => {
+    if (pageNo !== safePageNo) setPageNo(safePageNo);
+  }, [pageNo, safePageNo]);
+
+  return (
+    <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
+      <DocHeaderBlock page={page} />
+
+      <section className="search-card">
+        <div className="search-top-row doc-compact">
+          <div>
+            <strong>검색 조건</strong>
+            <p>화주사/품목코드/품목명/품목속성으로 조회하고 품목 등록일 정렬을 전환합니다.</p>
+          </div>
+          <div className="toolbar-actions">
+            <button type="button" className="primary" onClick={() => showToast(`조회 결과 ${filteredRows.length}건`)}>
+              검색
+            </button>
+            <button type="button" className="secondary" onClick={resetFilters}>검색 초기화</button>
+          </div>
+        </div>
+        <div className="filter-panel doc-open">
+          <div className="owner-checks">
+            {ownerOptions.map((owner) => (
+              <label key={owner}>
+                <input type="checkbox" checked={selectedOwners.has(owner)} onChange={() => toggleOwner(owner)} />
+                {owner}
+              </label>
+            ))}
+          </div>
+          <div className="filter-grid">
+            <label>
+              품목 코드
+              <input
+                type="text"
+                placeholder="콤마(,) 또는 Enter로 다중 키워드"
+                value={itemCodeQuery}
+                onChange={(event) => setItemCodeQuery(event.target.value)}
+              />
+            </label>
+            <label>
+              품목명
+              <input
+                type="text"
+                placeholder="포함 검색"
+                value={itemNameQuery}
+                onChange={(event) => setItemNameQuery(event.target.value)}
+              />
+            </label>
+            <label>
+              품목 속성
+              <input
+                type="text"
+                placeholder="예: Free, 단일상품"
+                value={attrQuery}
+                onChange={(event) => setAttrQuery(event.target.value)}
+              />
+            </label>
+            <label>
+              품목 등록일 정렬
+              <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+                <option value="asc">오름차순 ↑</option>
+                <option value="desc">내림차순 ↓</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <DocSummaryCards
+        items={[
+          { name: "총 조회 건수", value: formatNumber(filteredRows.length), description: "품목(재고) 건수" },
+          { name: "총 재고 수량", value: formatNumber(summary.totalStock), description: "상태 합산 수량" },
+          { name: "총 가용 수량", value: formatNumber(summary.available), description: `검수 대기 ${formatNumber(summary.pendingInspect)} 포함` },
+        ]}
+      />
+
+      <section className="table-toolbar doc-toolbar">
+        <div className="count-info">총 {formatNumber(filteredRows.length)}건 (페이지 {safePageNo}/{totalPage})</div>
+        <div className="toolbar-actions">
+          <button type="button" className="chip" onClick={() => showToast("엑셀 다운로드 실행")}>엑셀 다운로드</button>
+          <button
+            type="button"
+            className="chip"
+            onClick={() => showToast("TIP: Zone 정렬 아이콘으로 가로/세로 표시를 전환합니다.")}
+          >
+            활용 TIP
+          </button>
+          <button
+            type="button"
+            className={`chip ${zoneLayout === "vertical" ? "active-mode" : ""}`}
+            onClick={() => setZoneLayout("vertical")}
+          >
+            Zone 세로
+          </button>
+          <button
+            type="button"
+            className={`chip ${zoneLayout === "horizontal" ? "active-mode" : ""}`}
+            onClick={() => setZoneLayout("horizontal")}
+          >
+            Zone 가로
+          </button>
+          <select value={rowsPerPage} onChange={(event) => setRowsPerPage(event.target.value)}>
+            <option value="50">50개씩 보기</option>
+            <option value="100">100개씩 보기</option>
+            <option value="150">150개씩 보기</option>
+            <option value="200">200개씩 보기</option>
+          </select>
+        </div>
+      </section>
+
+      <div className="doc-table-wrap">
+        <table className="doc-table">
+          <thead>
+            <tr>
+              <th>화주사</th>
+              <th>품목 등록일</th>
+              <th>품목 코드</th>
+              <th>품목명</th>
+              <th>품목 속성</th>
+              <th>총 재고</th>
+              <th>가용</th>
+              <th>예약</th>
+              <th>불량</th>
+              <th>검수 대기</th>
+              <th>특수</th>
+              <th>Zone별 재고 목록</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleRows.map((row) => (
+              <tr key={row.__id}>
+                <td>{row.화주사}</td>
+                <td>{row.품목등록일}</td>
+                <td>{row.품목코드}</td>
+                <td>
+                  <button type="button" className="link-btn" onClick={() => showToast(`${row.품목명} 상세로 이동`)}>
+                    {row.품목명}
+                  </button>
+                </td>
+                <td>{row.품목속성}</td>
+                <td>{formatNumber(row.총재고)}</td>
+                <td>{formatNumber(row.가용)}</td>
+                <td>{formatNumber(row.예약)}</td>
+                <td>{formatNumber(row.불량)}</td>
+                <td>{formatNumber(row.검수대기)}</td>
+                <td>{formatNumber(row.특수)}</td>
+                <td>
+                  <div className={`zone-badges ${zoneLayout}`}>
+                    {row.zoneList.map(([zoneName, qty]) => (
+                      <span
+                        key={`${row.__id}-${zoneName}`}
+                        className={`zone-pill ${zoneName.includes("입고") ? "inbound" : zoneName.includes("보관") ? "storage" : "mulang"}`}
+                      >
+                        {zoneName} {formatNumber(qty)}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {!visibleRows.length ? (
+              <tr>
+                <td colSpan={12}>
+                  <div className="empty-state">조회 결과가 없습니다.</div>
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pager-inline">
+        <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.max(1, prev - 1))}>이전</button>
+        <span>{safePageNo} / {totalPage}</span>
+        <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.min(totalPage, prev + 1))}>다음</button>
+      </div>
+
+      <DocMetaBlock page={page} toast={toast} />
+    </PageLayout>
+  );
+}
+
+function ItemBarcodePrintSellmateDoc({ page }) {
+  const { toast, showToast } = useToast();
+  const ownerOptions = ["원차일드", "onedns_test", "테스트", "안나랜모드"];
+  const supplierOptions = ["자사"];
+  const [selectedOwners, setSelectedOwners] = useState(() => new Set());
+  const [itemCodeQuery, setItemCodeQuery] = useState("");
+  const [itemNameQuery, setItemNameQuery] = useState("");
+  const [itemAttrQuery, setItemAttrQuery] = useState("");
+  const [supplierQuery, setSupplierQuery] = useState("");
+  const [selectedSuppliers, setSelectedSuppliers] = useState(() => new Set());
+  const [showSupplierProductFilter, setShowSupplierProductFilter] = useState(false);
+  const [supplierProductQuery, setSupplierProductQuery] = useState("");
+  const [selectedRows, setSelectedRows] = useState(() => new Set());
+
+  const [rows] = useState([
+    { __id: "bar-001", 화주사: "원차일드", 품목코드: "10000011", 품목명: "데모 베이직 반팔 니트", 품목속성: "Free", 공급처: "자사", 공급처상품명: "BASIC KNIT" },
+    { __id: "bar-002", 화주사: "onedns_test", 품목코드: "10000012", 품목명: "데모 소프트 후드 집업", 품목속성: "단일상품", 공급처: "자사", 공급처상품명: "SOFT HOOD ZIPUP" },
+    { __id: "bar-003", 화주사: "onedns_test", 품목코드: "10000016", 품목명: "데모 와이드 데님", 품목속성: "Free", 공급처: "자사", 공급처상품명: "WIDE DENIM" },
+    { __id: "bar-004", 화주사: "테스트", 품목코드: "10000013", 품목명: "데모 기모 조거 팬츠", 품목속성: "Free", 공급처: "자사", 공급처상품명: "JOGGER PANTS" },
+  ]);
+
+  const filteredSupplierOptions = useMemo(() => {
+    const q = supplierQuery.trim().toLowerCase();
+    if (!q) return supplierOptions;
+    return supplierOptions.filter((item) => item.toLowerCase().includes(q));
+  }, [supplierQuery, supplierOptions]);
+
+  const filteredRows = useMemo(() => {
+    if (!selectedOwners.size) return [];
+    const codeKeywords = splitKeywords(itemCodeQuery);
+    const nameKeywords = splitKeywords(itemNameQuery);
+    const attrKeywords = splitKeywords(itemAttrQuery);
+    const supplierKeywords = splitKeywords(supplierProductQuery);
+    return rows.filter((row) => (
+      selectedOwners.has(row.화주사)
+      && matchesKeyword(row.품목코드, codeKeywords)
+      && matchesKeyword(row.품목명, nameKeywords)
+      && matchesKeyword(row.품목속성, attrKeywords)
+      && (!selectedSuppliers.size || selectedSuppliers.has(row.공급처))
+      && (!showSupplierProductFilter || matchesKeyword(row.공급처상품명, supplierKeywords))
+    ));
+  }, [rows, selectedOwners, itemCodeQuery, itemNameQuery, itemAttrQuery, selectedSuppliers, showSupplierProductFilter, supplierProductQuery]);
+
+  const selectedCount = useMemo(
+    () => filteredRows.filter((row) => selectedRows.has(row.__id)).length,
+    [filteredRows, selectedRows],
+  );
+
+  const allChecked = filteredRows.length > 0 && selectedCount === filteredRows.length;
+
+  const toggleOwner = (owner) => {
+    setSelectedOwners((prev) => {
+      const next = new Set(prev);
+      if (next.has(owner)) next.delete(owner);
+      else next.add(owner);
+      return next;
+    });
+  };
+
+  const toggleSupplier = (supplier) => {
+    setSelectedSuppliers((prev) => {
+      const next = new Set(prev);
+      if (next.has(supplier)) next.delete(supplier);
+      else next.add(supplier);
+      return next;
+    });
+  };
+
+  const toggleRow = (rowId) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (allChecked) filteredRows.forEach((row) => next.delete(row.__id));
+      else filteredRows.forEach((row) => next.add(row.__id));
+      return next;
+    });
+  };
+
+  const resetFilters = () => {
+    setSelectedOwners(new Set());
+    setItemCodeQuery("");
+    setItemNameQuery("");
+    setItemAttrQuery("");
+    setSupplierQuery("");
+    setSelectedSuppliers(new Set());
+    setShowSupplierProductFilter(false);
+    setSupplierProductQuery("");
+    setSelectedRows(new Set());
+    showToast("검색 조건을 초기화했습니다.");
+  };
+
+  return (
+    <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
+      <DocHeaderBlock page={page} />
+
+      <section className="search-card">
+        <div className="search-top-row doc-compact">
+          <div>
+            <strong>검색 조건</strong>
+            <p>화주사 선택이 필수이며, 선택된 품목만 출력 버튼이 활성화됩니다.</p>
+          </div>
+          <div className="toolbar-actions">
+            <button
+              type="button"
+              className="primary"
+              onClick={() => showToast(selectedOwners.size ? `조회 결과 ${filteredRows.length}건` : "화주사를 먼저 선택하세요.")}
+            >
+              검색
+            </button>
+            <button type="button" className="secondary" onClick={resetFilters}>검색 초기화</button>
+          </div>
+        </div>
+        <div className="filter-panel doc-open">
+          <div className="owner-checks">
+            {ownerOptions.map((owner) => (
+              <label key={owner}>
+                <input type="checkbox" checked={selectedOwners.has(owner)} onChange={() => toggleOwner(owner)} />
+                {owner}
+              </label>
+            ))}
+          </div>
+          <div className="filter-grid">
+            <label>
+              품목 코드
+              <input value={itemCodeQuery} onChange={(event) => setItemCodeQuery(event.target.value)} placeholder="포함 검색" />
+            </label>
+            <label>
+              품목명
+              <input value={itemNameQuery} onChange={(event) => setItemNameQuery(event.target.value)} placeholder="포함 검색" />
+            </label>
+            <label>
+              품목 속성
+              <input value={itemAttrQuery} onChange={(event) => setItemAttrQuery(event.target.value)} placeholder="예: Free" />
+            </label>
+            <label>
+              공급처 검색
+              <input value={supplierQuery} onChange={(event) => setSupplierQuery(event.target.value)} placeholder="공급처명 검색" />
+            </label>
+          </div>
+          <div className="owner-checks compact">
+            {filteredSupplierOptions.map((supplier) => (
+              <label key={supplier}>
+                <input type="checkbox" checked={selectedSuppliers.has(supplier)} onChange={() => toggleSupplier(supplier)} />
+                {supplier}
+              </label>
+            ))}
+            <button
+              type="button"
+              className={`chip ${showSupplierProductFilter ? "active-mode" : ""}`}
+              onClick={() => setShowSupplierProductFilter((prev) => !prev)}
+            >
+              + 필터추가: 공급처 상품명
+            </button>
+          </div>
+          {showSupplierProductFilter ? (
+            <div className="filter-grid">
+              <label>
+                공급처 상품명
+                <input
+                  value={supplierProductQuery}
+                  onChange={(event) => setSupplierProductQuery(event.target.value)}
+                  placeholder="공급처 상품명 포함 검색"
+                />
+              </label>
+            </div>
+          ) : null}
+          <div className="active-tags">
+            {[...selectedOwners].map((owner) => (
+              <button
+                key={`owner-${owner}`}
+                type="button"
+                className="active-tag"
+                onClick={() => toggleOwner(owner)}
+              >
+                화주사 : {owner} ×
+              </button>
+            ))}
+            {itemCodeQuery ? (
+              <button type="button" className="active-tag" onClick={() => setItemCodeQuery("")}>품목 코드 : {itemCodeQuery} ×</button>
+            ) : null}
+            {itemNameQuery ? (
+              <button type="button" className="active-tag" onClick={() => setItemNameQuery("")}>품목명 : {itemNameQuery} ×</button>
+            ) : null}
+            {itemAttrQuery ? (
+              <button type="button" className="active-tag" onClick={() => setItemAttrQuery("")}>품목 속성 : {itemAttrQuery} ×</button>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="table-toolbar doc-toolbar">
+        <div className="count-info">총 {formatNumber(filteredRows.length)}건 / {formatNumber(selectedCount)}건 선택</div>
+        <div className="toolbar-actions">
+          <button
+            type="button"
+            className="primary"
+            disabled={selectedCount === 0}
+            onClick={() => showToast(`${selectedCount}건 바코드 출력 실행`)}
+          >
+            출력
+          </button>
+          <button type="button" className="chip" onClick={() => showToast("출력 템플릿 관리 화면으로 이동")}>
+            출력 템플릿 관리
+          </button>
+        </div>
+      </section>
+
+      <div className="doc-table-wrap">
+        <table className="doc-table">
+          <thead>
+            <tr>
+              <th>
+                <input type="checkbox" checked={allChecked} onChange={toggleAll} disabled={!filteredRows.length} />
+              </th>
+              <th>화주사</th>
+              <th>품목 코드</th>
+              <th>품목명 / 품목 속성</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!selectedOwners.size ? (
+              <tr>
+                <td colSpan={4}>
+                  <div className="empty-state">데이터를 불러오기 위해, 검색 조건(화주사) 설정이 필요합니다.</div>
+                </td>
+              </tr>
+            ) : null}
+            {selectedOwners.size && !filteredRows.length ? (
+              <tr>
+                <td colSpan={4}>
+                  <div className="empty-state">검색 결과가 없습니다.</div>
+                </td>
+              </tr>
+            ) : null}
+            {filteredRows.map((row) => (
+              <tr key={row.__id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.has(row.__id)}
+                    onChange={() => toggleRow(row.__id)}
+                  />
+                </td>
+                <td>{row.화주사}</td>
+                <td>{row.품목코드}</td>
+                <td>
+                  <button type="button" className="link-btn" onClick={() => showToast(`${row.품목명} 상세 보기`)}>
+                    {row.품목명}
+                  </button>
+                  <div className="cell-title">{row.품목속성}</div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pager-inline">
+        <span>페이지당 건수</span>
+        <select defaultValue="50">
+          <option>50개씩 보기</option>
+          <option>100개씩 보기</option>
+          <option>150개씩 보기</option>
+          <option>200개씩 보기</option>
+        </select>
+      </div>
+
+      <DocMetaBlock page={page} toast={toast} />
+    </PageLayout>
+  );
+}
+
+function LocationStockListSellmateDoc({ page }) {
+  const { toast, showToast } = useToast();
+  const ownerOptions = ["원차일드", "onedns_test", "테스트", "안나랜모드"];
+  const zoneOptions = ["입고 존", "보관 존", "뮬랑"];
+  const statusOptions = ["가용", "검수 대기"];
+  const [selectedOwners, setSelectedOwners] = useState(() => new Set(["onedns_test"]));
+  const [locationQuery, setLocationQuery] = useState("");
+  const [itemCodeQuery, setItemCodeQuery] = useState("");
+  const [itemNameQuery, setItemNameQuery] = useState("");
+  const [itemAttrQuery, setItemAttrQuery] = useState("");
+  const [useZoneFilter, setUseZoneFilter] = useState(false);
+  const [zoneFilter, setZoneFilter] = useState("보관 존");
+  const [useStatusFilter, setUseStatusFilter] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("가용");
+  const [rowsPerPage, setRowsPerPage] = useState("50");
+  const [pageNo, setPageNo] = useState(1);
+
+  const [rows] = useState([
+    { __id: "loc-001", 화주사: "onedns_test", Zone: "보관 존", 로케이션명: "a-0001", 상태: "가용", 품목코드: "10000011", 품목명: "데모 베이직 반팔 니트", 품목속성: "Free", 공급처: "자사", 유통기한: "2026-12-31", 로트번호: "LOT-001", 총재고: 200, 예약: 12 },
+    { __id: "loc-002", 화주사: "onedns_test", Zone: "보관 존", 로케이션명: "a-0002", 상태: "가용", 품목코드: "10000012", 품목명: "데모 소프트 후드 집업", 품목속성: "단일상품", 공급처: "자사", 유통기한: "-", 로트번호: "-", 총재고: 160, 예약: 9 },
+    { __id: "loc-003", 화주사: "onedns_test", Zone: "입고 존", 로케이션명: "rcv_conf", 상태: "검수 대기", 품목코드: "10000016", 품목명: "데모 와이드 데님", 품목속성: "Free", 공급처: "자사", 유통기한: "-", 로트번호: "LOT-004", 총재고: 42, 예약: 0 },
+    { __id: "loc-004", 화주사: "원차일드", Zone: "뮬랑", 로케이션명: "C-01-01", 상태: "가용", 품목코드: "10000015", 품목명: "데모 슬림 롱슬리브", 품목속성: "Free", 공급처: "자사", 유통기한: "2026-11-30", 로트번호: "LOT-102", 총재고: 130, 예약: 6 },
+    { __id: "loc-005", 화주사: "테스트", Zone: "입고 존", 로케이션명: "B2B_RTN_CONF", 상태: "검수 대기", 품목코드: "10000013", 품목명: "데모 기모 조거 팬츠", 품목속성: "Free", 공급처: "자사", 유통기한: "-", 로트번호: "-", 총재고: 34, 예약: 0 },
+  ]);
+
+  const toggleOwner = (owner) => {
+    setSelectedOwners((prev) => {
+      const next = new Set(prev);
+      if (next.has(owner)) next.delete(owner);
+      else next.add(owner);
+      return next;
+    });
+    setPageNo(1);
+  };
+
+  const resetFilters = () => {
+    setSelectedOwners(new Set(["onedns_test"]));
+    setLocationQuery("");
+    setItemCodeQuery("");
+    setItemNameQuery("");
+    setItemAttrQuery("");
+    setUseZoneFilter(false);
+    setZoneFilter("보관 존");
+    setUseStatusFilter(false);
+    setStatusFilter("가용");
+    setRowsPerPage("50");
+    setPageNo(1);
+    showToast("검색 조건을 초기화했습니다.");
+  };
+
+  const filteredRows = useMemo(() => {
+    const codeKeywords = splitKeywords(itemCodeQuery);
+    const nameKeywords = splitKeywords(itemNameQuery);
+    const attrKeywords = splitKeywords(itemAttrQuery);
+    const locationKeywords = splitKeywords(locationQuery);
+    const ownerSet = selectedOwners.size ? selectedOwners : new Set(ownerOptions);
+    return rows
+      .filter((row) => (
+        ownerSet.has(row.화주사)
+        && matchesKeyword(row.로케이션명, locationKeywords)
+        && matchesKeyword(row.품목코드, codeKeywords)
+        && matchesKeyword(row.품목명, nameKeywords)
+        && matchesKeyword(row.품목속성, attrKeywords)
+        && (!useZoneFilter || row.Zone === zoneFilter)
+        && (!useStatusFilter || row.상태 === statusFilter)
+      ))
+      .sort((a, b) => String(a.로케이션명).localeCompare(String(b.로케이션명)));
+  }, [rows, selectedOwners, ownerOptions, locationQuery, itemCodeQuery, itemNameQuery, itemAttrQuery, useZoneFilter, zoneFilter, useStatusFilter, statusFilter]);
+
+  const summary = useMemo(() => {
+    const totalStock = filteredRows.reduce((sum, row) => sum + row.총재고, 0);
+    const totalReserved = filteredRows.reduce((sum, row) => sum + row.예약, 0);
+    return { totalStock, totalReserved };
+  }, [filteredRows]);
+
+  const pageSize = Number(rowsPerPage);
+  const totalPage = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const safePageNo = Math.min(pageNo, totalPage);
+  const visibleRows = filteredRows.slice((safePageNo - 1) * pageSize, safePageNo * pageSize);
+
+  useEffect(() => {
+    if (pageNo !== safePageNo) setPageNo(safePageNo);
+  }, [pageNo, safePageNo]);
+
+  return (
+    <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
+      <DocHeaderBlock page={page} />
+
+      <section className="search-card">
+        <div className="search-top-row doc-compact">
+          <div>
+            <strong>검색 조건</strong>
+            <p>로케이션명 오름차순 기본 정렬, Zone/상태 추가 필터를 지원합니다.</p>
+          </div>
+          <div className="toolbar-actions">
+            <button type="button" className="primary" onClick={() => showToast(`조회 결과 ${filteredRows.length}건`)}>
+              검색
+            </button>
+            <button type="button" className="secondary" onClick={resetFilters}>검색 초기화</button>
+          </div>
+        </div>
+        <div className="filter-panel doc-open">
+          <div className="owner-checks">
+            {ownerOptions.map((owner) => (
+              <label key={owner}>
+                <input type="checkbox" checked={selectedOwners.has(owner)} onChange={() => toggleOwner(owner)} />
+                {owner}
+              </label>
+            ))}
+          </div>
+          <div className="filter-grid">
+            <label>
+              로케이션명
+              <input value={locationQuery} onChange={(event) => setLocationQuery(event.target.value)} placeholder="예: a-0, rcv" />
+            </label>
+            <label>
+              품목 코드
+              <input value={itemCodeQuery} onChange={(event) => setItemCodeQuery(event.target.value)} placeholder="포함 검색" />
+            </label>
+            <label>
+              품목명
+              <input value={itemNameQuery} onChange={(event) => setItemNameQuery(event.target.value)} placeholder="포함 검색" />
+            </label>
+            <label>
+              품목 속성
+              <input value={itemAttrQuery} onChange={(event) => setItemAttrQuery(event.target.value)} placeholder="예: Free" />
+            </label>
+          </div>
+          <div className="mode-toggle">
+            <button
+              type="button"
+              className={`chip ${useZoneFilter ? "active-mode" : ""}`}
+              onClick={() => setUseZoneFilter((prev) => !prev)}
+            >
+              + 필터추가: Zone
+            </button>
+            <button
+              type="button"
+              className={`chip ${useStatusFilter ? "active-mode" : ""}`}
+              onClick={() => setUseStatusFilter((prev) => !prev)}
+            >
+              + 필터추가: 상태
+            </button>
+          </div>
+          {(useZoneFilter || useStatusFilter) ? (
+            <div className="filter-grid">
+              {useZoneFilter ? (
+                <label>
+                  Zone
+                  <select value={zoneFilter} onChange={(event) => setZoneFilter(event.target.value)}>
+                    {zoneOptions.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+              ) : null}
+              {useStatusFilter ? (
+                <label>
+                  상태
+                  <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                    {statusOptions.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <DocSummaryCards
+        items={[
+          { name: "총 조회 건수", value: formatNumber(filteredRows.length), description: "로케이션 × 재고 행 수" },
+          { name: "총 재고 수량", value: formatNumber(summary.totalStock), description: "예약 포함 수량" },
+          { name: "총 예약 수량", value: formatNumber(summary.totalReserved), description: `가용 계산값 ${formatNumber(summary.totalStock - summary.totalReserved)}` },
+        ]}
+      />
+
+      <section className="table-toolbar doc-toolbar">
+        <div className="count-info">총 {formatNumber(filteredRows.length)}건 (페이지 {safePageNo}/{totalPage})</div>
+        <div className="toolbar-actions">
+          <button type="button" className="chip" onClick={() => showToast("엑셀 다운로드 실행")}>엑셀 다운로드</button>
+          <button
+            type="button"
+            className="chip"
+            onClick={() => showToast("TIP: 총 재고는 예약 포함 수량입니다. 가용 재고는 총 재고 - 예약으로 계산합니다.")}
+          >
+            활용 TIP
+          </button>
+          <select value={rowsPerPage} onChange={(event) => setRowsPerPage(event.target.value)}>
+            <option value="50">50개씩 보기</option>
+            <option value="100">100개씩 보기</option>
+            <option value="150">150개씩 보기</option>
+            <option value="200">200개씩 보기</option>
+          </select>
+        </div>
+      </section>
+
+      <div className="doc-table-wrap">
+        <table className="doc-table">
+          <thead>
+            <tr>
+              <th>화주사</th>
+              <th>Zone</th>
+              <th>로케이션명</th>
+              <th>상태</th>
+              <th>품목 코드</th>
+              <th>품목명</th>
+              <th>품목 속성</th>
+              <th>공급처</th>
+              <th>유통기한</th>
+              <th>로트번호</th>
+              <th>총 재고</th>
+              <th>예약</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleRows.map((row) => (
+              <tr key={row.__id}>
+                <td>{row.화주사}</td>
+                <td>{row.Zone}</td>
+                <td>{row.로케이션명}</td>
+                <td><span className={`status-pill ${row.상태 === "검수 대기" ? "wait" : "ok"}`}>{row.상태}</span></td>
+                <td>{row.품목코드}</td>
+                <td>
+                  <button type="button" className="link-btn" onClick={() => showToast(`${row.품목명} 상세 조회`)}>
+                    {row.품목명}
+                  </button>
+                </td>
+                <td>{row.품목속성}</td>
+                <td>{row.공급처}</td>
+                <td>{row.유통기한}</td>
+                <td>{row.로트번호}</td>
+                <td>{formatNumber(row.총재고)}</td>
+                <td>{formatNumber(row.예약)}</td>
+              </tr>
+            ))}
+            {!visibleRows.length ? (
+              <tr>
+                <td colSpan={12}>
+                  <div className="empty-state">조회 결과가 없습니다.</div>
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pager-inline">
+        <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.max(1, prev - 1))}>이전</button>
+        <span>{safePageNo} / {totalPage}</span>
+        <button type="button" className="chip" onClick={() => setPageNo((prev) => Math.min(totalPage, prev + 1))}>다음</button>
+      </div>
+
+      <DocMetaBlock page={page} toast={toast} />
+    </PageLayout>
+  );
+}
+
+function StockMovementSuiteSellmateDoc({ page }) {
+  const { toast, showToast } = useToast();
+  const ownerOptions = ["원차일드", "onedns_test", "테스트", "안나랜모드"];
+  const [activeTab, setActiveTab] = useState("history");
+  const [historyType, setHistoryType] = useState("전체");
+  const [historyKeyword, setHistoryKeyword] = useState("");
+  const [orderStatus, setOrderStatus] = useState("전체");
+  const [instructionSelected, setInstructionSelected] = useState(() => new Set());
+  const [executionStage, setExecutionStage] = useState("이동대기");
+  const [executionSelected, setExecutionSelected] = useState(() => new Set());
+  const [manualOwner, setManualOwner] = useState("");
+  const [manualSelected, setManualSelected] = useState(() => new Set());
+  const [manualRows, setManualRows] = useState([
+    { __id: "manual-001", 화주사: "onedns_test", 품목코드: "10000011", "품목명/품목 속성": "데모 베이직 반팔 니트 / Free", 공급처: "자사", 로케이션: "a-0001", 유통기한: "2026-12-31", 로트번호: "LOT-001", 가용: "180", 예약: "12", 검수대기: "0", 불량: "2", 특수: "1" },
+    { __id: "manual-002", 화주사: "원차일드", 품목코드: "10000015", "품목명/품목 속성": "데모 슬림 롱슬리브 / Free", 공급처: "자사", 로케이션: "C-01-01", 유통기한: "2026-11-30", 로트번호: "LOT-102", 가용: "120", 예약: "6", 검수대기: "0", 불량: "1", 특수: "0" },
+  ]);
+
+  const [executionRows, setExecutionRows] = useState([
+    { __id: "exec-001", 화주사: "onedns_test", "이동 오더 번호": "MV-202603-0001", 이동생성일: "2026-03-01", 이동지시일: "2026-03-02", 품목명: "데모 베이직 반팔 니트", "품목 총 수량": "120", 메모: "A-0001 -> B-0001", 진행상태: "이동대기" },
+    { __id: "exec-002", 화주사: "원차일드", "이동 오더 번호": "MV-202603-0002", 이동생성일: "2026-03-01", 이동지시일: "2026-03-02", 품목명: "데모 슬림 롱슬리브", "품목 총 수량": "85", 메모: "C-01-01 -> A-0003", 진행상태: "이동중" },
+    { __id: "exec-003", 화주사: "onedns_test", "이동 오더 번호": "MV-202603-0003", 이동생성일: "2026-02-28", 이동지시일: "2026-03-01", 품목명: "데모 와이드 데님", "품목 총 수량": "44", 메모: "rcv_conf -> a-0002", 진행상태: "이동완료" },
+  ]);
+
+  const historyRows = [
+    { __id: "his-001", 일시: "2026-03-03 09:42", 화주사: "onedns_test", "Zone/로케이션": "보관 존 / a-0001", 품목코드: "10000011", "품목명/품목 속성": "데모 베이직 반팔 니트 / Free", "공급처/유통기한/로트번호": "자사 / 2026-12-31 / LOT-001", 수량: "14", 구분: "출고", 작업위치: "패킹존", 작업자: "김작업", 메모: "오더 SHP-001" },
+    { __id: "his-002", 일시: "2026-03-03 10:15", 화주사: "원차일드", "Zone/로케이션": "뮬랑 / C-01-01", 품목코드: "10000015", "품목명/품목 속성": "데모 슬림 롱슬리브 / Free", "공급처/유통기한/로트번호": "자사 / 2026-11-30 / LOT-102", 수량: "21", 구분: "이동", 작업위치: "C-01-01", 작업자: "이관리", 메모: "MV-202603-0002" },
+    { __id: "his-003", 일시: "2026-03-03 11:40", 화주사: "테스트", "Zone/로케이션": "입고 존 / rcv_conf", 품목코드: "10000013", "품목명/품목 속성": "데모 기모 조거 팬츠 / Free", "공급처/유통기한/로트번호": "자사 / - / -", 수량: "32", 구분: "입고", 작업위치: "입고존", 작업자: "박검수", 메모: "입고 오더 RCV-903" },
+    { __id: "his-004", 일시: "2026-03-02 15:20", 화주사: "onedns_test", "Zone/로케이션": "보관 존 / a-0002", 품목코드: "10000016", "품목명/품목 속성": "데모 와이드 데님 / Free", "공급처/유통기한/로트번호": "자사 / - / LOT-004", 수량: "6", 구분: "조정", 작업위치: "Aisle-2", 작업자: "김작업", 메모: "조정 승인 ADJ-1102" },
+  ];
+
+  const orderRows = [
+    { __id: "ord-001", 화주사: "onedns_test", "이동 오더 번호": "MV-202603-0001", 이동생성일: "2026-03-01", 이동지시일: "2026-03-02", 이동완료일: "-", "이동 지시 수량": "120", "이동 오더 상태": "이동대기", 메모: "A-0001 -> B-0001" },
+    { __id: "ord-002", 화주사: "원차일드", "이동 오더 번호": "MV-202603-0002", 이동생성일: "2026-03-01", 이동지시일: "2026-03-02", 이동완료일: "-", "이동 지시 수량": "85", "이동 오더 상태": "이동중", 메모: "C-01-01 -> A-0003" },
+    { __id: "ord-003", 화주사: "onedns_test", "이동 오더 번호": "MV-202603-0003", 이동생성일: "2026-02-28", 이동지시일: "2026-03-01", 이동완료일: "2026-03-02", "이동 지시 수량": "44", "이동 오더 상태": "이동완료", 메모: "rcv_conf -> a-0002" },
+  ];
+
+  const instructionRows = [
+    { __id: "ins-001", 화주사: "onedns_test", "이동 오더 번호": "MV-202603-0005", 생성일: "2026-03-03", 품목명: "데모 베이직 반팔 니트", "이동 지시 수량": "60", 메모: "A-0001 -> B-0002" },
+    { __id: "ins-002", 화주사: "테스트", "이동 오더 번호": "MV-202603-0006", 생성일: "2026-03-03", 품목명: "데모 기모 조거 팬츠", "이동 지시 수량": "33", 메모: "B2B_RTN_CONF -> a-0002" },
+  ];
+
+  const historyFilteredRows = useMemo(() => {
+    const keywords = splitKeywords(historyKeyword);
+    return historyRows.filter((row) => (
+      (historyType === "전체" || row.구분 === historyType)
+      && matchesKeyword(`${row.품목코드} ${row["품목명/품목 속성"]}`, keywords)
+    ));
+  }, [historyType, historyKeyword, historyRows]);
+
+  const orderFilteredRows = useMemo(() => {
+    if (orderStatus === "전체") return orderRows;
+    return orderRows.filter((row) => row["이동 오더 상태"] === orderStatus);
+  }, [orderRows, orderStatus]);
+
+  const instructionViewRows = useMemo(() => instructionRows.map((row) => ({
+    ...row,
+    선택: instructionSelected.has(row.__id) ? "☑" : "☐",
+  })), [instructionRows, instructionSelected]);
+
+  const executionStageRows = useMemo(
+    () => executionRows.filter((row) => row.진행상태 === executionStage),
+    [executionRows, executionStage],
+  );
+
+  const executionViewRows = useMemo(
+    () => executionStageRows.map((row) => ({ ...row, 선택: executionSelected.has(row.__id) ? "☑" : "☐" })),
+    [executionStageRows, executionSelected],
+  );
+
+  const manualViewRows = useMemo(() => {
+    if (!manualOwner) return [];
+    return manualRows
+      .filter((row) => row.화주사 === manualOwner)
+      .map((row) => ({ ...row, 선택: manualSelected.has(row.__id) ? "☑" : "☐" }));
+  }, [manualRows, manualOwner, manualSelected]);
+
+  const handleInstructionAction = (actionName) => {
+    const selectedCount = instructionRows.filter((row) => instructionSelected.has(row.__id)).length;
+    if (!selectedCount) {
+      showToast("이동 오더를 선택하세요.");
+      return;
+    }
+    if (actionName === "이동 예정 등록") {
+      showToast("이동 예정 정보 등록이 완료되었습니다.");
+      return;
+    }
+    showToast(`${actionName} ${selectedCount}건 처리`);
+  };
+
+  const handleExecutionConfirm = () => {
+    const selectedCount = executionStageRows.filter((row) => executionSelected.has(row.__id)).length;
+    if (!selectedCount) {
+      showToast("확정할 이동 건을 선택하세요.");
+      return;
+    }
+    const nextStage = executionStage === "이동대기" ? "이동중" : executionStage === "이동중" ? "이동완료" : "이동완료";
+    setExecutionRows((prev) => prev.map((row) => (executionSelected.has(row.__id) ? { ...row, 진행상태: nextStage } : row)));
+    setExecutionSelected(new Set());
+    showToast(`이동 확정 완료 (${nextStage})`);
+  };
+
+  const handleManualMove = () => {
+    const selectedCount = manualViewRows.filter((row) => manualSelected.has(row.__id)).length;
+    if (!manualOwner) {
+      showToast("화주사를 먼저 선택하세요.");
+      return;
+    }
+    if (!selectedCount) {
+      showToast("임의 이동할 재고를 선택하세요.");
+      return;
+    }
+    setManualRows((prev) => prev.map((row) => (
+      manualSelected.has(row.__id) ? { ...row, 로케이션: "MOVE-TEMP-01" } : row
+    )));
+    setManualSelected(new Set());
+    showToast(`임의 이동 ${selectedCount}건 처리`);
+  };
+
+  return (
+    <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
+      <DocHeaderBlock page={page} />
+
+      <section className="special-panel">
+        <h3>이동 업무 탭</h3>
+        <p>문서 기준으로 입출고 이력 조회부터 이동 지시/실행/임의 이동까지 한 화면에서 데모합니다.</p>
+        <div className="mode-toggle">
+          {[
+            { key: "history", label: "입출고 및 이동 내역" },
+            { key: "order", label: "이동 오더 목록" },
+            { key: "instruction", label: "이동 지시" },
+            { key: "execution", label: "이동 실행" },
+            { key: "manual", label: "임의 이동" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`chip ${activeTab === tab.key ? "active-mode" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {activeTab === "history" ? (
+        <>
+          <section className="search-card">
+            <div className="search-top-row doc-compact">
+              <div>
+                <strong>검색 조건</strong>
+                <p>입출고 일자(필수), 구분, 품목 키워드로 통합 이력을 조회합니다.</p>
+              </div>
+              <div className="toolbar-actions">
+                <button type="button" className="primary" onClick={() => showToast(`조회 결과 ${historyFilteredRows.length}건`)}>
+                  검색
+                </button>
+                <button type="button" className="secondary" onClick={() => { setHistoryType("전체"); setHistoryKeyword(""); }}>
+                  검색 초기화
+                </button>
+              </div>
+            </div>
+            <div className="filter-panel doc-open">
+              <div className="filter-grid">
+                <label>입출고 일자(시작)<input type="date" defaultValue="2026-03-01" /></label>
+                <label>입출고 일자(종료)<input type="date" defaultValue="2026-03-03" /></label>
+                <label>
+                  구분
+                  <select value={historyType} onChange={(event) => setHistoryType(event.target.value)}>
+                    {["전체", "입고", "출고", "이동", "반출", "B2B 반품", "B2C 반품", "조정"].map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+                <label>
+                  품목 코드/품목명
+                  <input value={historyKeyword} onChange={(event) => setHistoryKeyword(event.target.value)} placeholder="포함 검색" />
+                </label>
+              </div>
+            </div>
+          </section>
+          <DocSummaryCards
+            items={[
+              { name: "총 이력 건수", value: formatNumber(historyFilteredRows.length), description: "필터 기준 트랜잭션 수" },
+              { name: "이동 건수", value: formatNumber(historyFilteredRows.filter((row) => row.구분 === "이동").length), description: "구분=이동" },
+              { name: "조정 건수", value: formatNumber(historyFilteredRows.filter((row) => row.구분 === "조정").length), description: "구분=조정" },
+            ]}
+          />
+          <section className="table-toolbar doc-toolbar">
+            <div className="count-info">입출고 및 이동 내역 {formatNumber(historyFilteredRows.length)}건</div>
+            <div className="toolbar-actions">
+              <button type="button" className="chip" onClick={() => showToast("엑셀 다운로드 실행")}>엑셀 다운로드</button>
+            </div>
+          </section>
+          <DocTableBlock
+            columns={["일시", "화주사", "Zone/로케이션", "품목코드", "품목명/품목 속성", "공급처/유통기한/로트번호", "수량", "구분", "작업위치", "작업자", "메모"]}
+            rows={historyFilteredRows}
+          />
+        </>
+      ) : null}
+
+      {activeTab === "order" ? (
+        <>
+          <section className="search-card">
+            <div className="search-top-row doc-compact">
+              <div>
+                <strong>검색 조건</strong>
+                <p>이동 생성일/지시일/완료일과 상태값으로 이동 오더 현황을 조회합니다.</p>
+              </div>
+              <div className="toolbar-actions">
+                <button type="button" className="primary" onClick={() => showToast(`조회 결과 ${orderFilteredRows.length}건`)}>
+                  검색
+                </button>
+                <button type="button" className="secondary" onClick={() => setOrderStatus("전체")}>검색 초기화</button>
+              </div>
+            </div>
+            <div className="filter-panel doc-open">
+              <div className="filter-grid">
+                <label>이동 생성일<input type="date" defaultValue="2026-03-01" /></label>
+                <label>이동 지시일<input type="date" defaultValue="2026-03-02" /></label>
+                <label>이동 완료일<input type="date" /></label>
+                <label>
+                  상태
+                  <select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)}>
+                    {["전체", "이동예정", "이동대기", "이동중", "이동완료", "취소완료"].map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+              </div>
+            </div>
+          </section>
+          <section className="table-toolbar doc-toolbar">
+            <div className="count-info">이동 오더 목록 {formatNumber(orderFilteredRows.length)}건</div>
+            <div className="toolbar-actions">
+              <button type="button" className="chip" onClick={() => showToast("엑셀 다운로드 실행")}>엑셀 다운로드</button>
+            </div>
+          </section>
+          <DocTableBlock
+            columns={["화주사", "이동 오더 번호", "이동생성일", "이동지시일", "이동완료일", "이동 지시 수량", "이동 오더 상태", "메모"]}
+            rows={orderFilteredRows}
+          />
+        </>
+      ) : null}
+
+      {activeTab === "instruction" ? (
+        <>
+          <section className="search-card">
+            <div className="search-top-row doc-compact">
+              <div>
+                <strong>검색 조건</strong>
+                <p>이동 생성일과 화주 기준으로 지시 발행 대상을 조회합니다.</p>
+              </div>
+              <div className="toolbar-actions">
+                <button type="button" className="primary" onClick={() => showToast(`조회 결과 ${instructionRows.length}건`)}>
+                  검색
+                </button>
+                <button type="button" className="secondary" onClick={() => setInstructionSelected(new Set())}>선택 초기화</button>
+              </div>
+            </div>
+            <div className="filter-panel doc-open">
+              <div className="filter-grid">
+                <label>이동 생성일<input type="date" defaultValue="2026-03-03" /></label>
+                <label>
+                  화주사
+                  <select defaultValue="전체">
+                    <option>전체</option>
+                    {ownerOptions.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+                <label>이동 오더 번호<input type="text" placeholder="MV-202603-0005" /></label>
+                <label>품목 코드<input type="text" placeholder="10000011" /></label>
+              </div>
+            </div>
+          </section>
+          <section className="table-toolbar doc-toolbar">
+            <div className="count-info">총 {formatNumber(instructionRows.length)}건 / {formatNumber(instructionSelected.size)}건 선택</div>
+            <div className="toolbar-actions">
+              <button type="button" className="chip" onClick={() => handleInstructionAction("이동 지시")}>이동 지시</button>
+              <button type="button" className="chip" onClick={() => handleInstructionAction("이동 예정 등록")}>이동 예정 등록</button>
+              <button type="button" className="chip" onClick={() => showToast("파일로 등록 팝업 실행")}>파일로 등록</button>
+            </div>
+          </section>
+          <DocTableBlock
+            columns={["선택", "화주사", "이동 오더 번호", "생성일", "품목명", "이동 지시 수량", "메모"]}
+            rows={instructionViewRows}
+            onRowClick={(row) => {
+              setInstructionSelected((prev) => {
+                const next = new Set(prev);
+                if (next.has(row.__id)) next.delete(row.__id);
+                else next.add(row.__id);
+                return next;
+              });
+            }}
+          />
+        </>
+      ) : null}
+
+      {activeTab === "execution" ? (
+        <>
+          <section className="search-card">
+            <div className="search-top-row doc-compact">
+              <div>
+                <strong>검색 조건</strong>
+                <p>이동 지시일 기준 조회 후 상태 탭(이동대기/이동중/이동완료)으로 실행 단계를 관리합니다.</p>
+              </div>
+              <div className="toolbar-actions">
+                <button type="button" className="primary" onClick={() => showToast(`현재 탭 ${executionStageRows.length}건`)}>
+                  검색
+                </button>
+                <button type="button" className="secondary" onClick={() => setExecutionSelected(new Set())}>선택 초기화</button>
+              </div>
+            </div>
+            <div className="filter-panel doc-open">
+              <div className="filter-grid">
+                <label>이동 지시일<input type="date" defaultValue="2026-03-02" /></label>
+                <label>
+                  화주사
+                  <select defaultValue="전체">
+                    <option>전체</option>
+                    {ownerOptions.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+                <label>이동 오더 번호<input type="text" placeholder="MV-202603-" /></label>
+                <label>품목 코드<input type="text" placeholder="10000011" /></label>
+              </div>
+            </div>
+          </section>
+          <section className="special-panel">
+            <h3>상태 탭</h3>
+            <div className="mode-toggle">
+              {["이동대기", "이동중", "이동완료"].map((stage) => (
+                <button
+                  key={stage}
+                  type="button"
+                  className={`chip ${executionStage === stage ? "active-mode" : ""}`}
+                  onClick={() => {
+                    setExecutionStage(stage);
+                    setExecutionSelected(new Set());
+                  }}
+                >
+                  {stage} ({executionRows.filter((row) => row.진행상태 === stage).length})
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="table-toolbar doc-toolbar">
+            <div className="count-info">{executionStage} {formatNumber(executionStageRows.length)}건 / {formatNumber(executionSelected.size)}건 선택</div>
+            <div className="toolbar-actions">
+              <button type="button" className="chip" onClick={() => showToast("작업 지시서 출력 실행")}>작업 지시서 출력</button>
+              <button type="button" className="chip" onClick={handleExecutionConfirm}>이동 확정</button>
+            </div>
+          </section>
+          <DocTableBlock
+            columns={["선택", "화주사", "이동 오더 번호", "이동생성일", "이동지시일", "품목명", "품목 총 수량", "메모"]}
+            rows={executionViewRows}
+            onRowClick={(row) => {
+              setExecutionSelected((prev) => {
+                const next = new Set(prev);
+                if (next.has(row.__id)) next.delete(row.__id);
+                else next.add(row.__id);
+                return next;
+              });
+            }}
+          />
+        </>
+      ) : null}
+
+      {activeTab === "manual" ? (
+        <>
+          <section className="search-card">
+            <div className="search-top-row doc-compact">
+              <div>
+                <strong>검색 조건</strong>
+                <p>임의 이동은 화주사 선택이 필수입니다.</p>
+              </div>
+              <div className="toolbar-actions">
+                <button type="button" className="primary" onClick={() => showToast(manualOwner ? `조회 결과 ${manualViewRows.length}건` : "화주사를 먼저 선택하세요.")}>
+                  검색
+                </button>
+                <button type="button" className="secondary" onClick={() => { setManualOwner(""); setManualSelected(new Set()); }}>검색 초기화</button>
+              </div>
+            </div>
+            <div className="filter-panel doc-open">
+              <div className="filter-grid">
+                <label>
+                  화주사(필수)
+                  <select value={manualOwner} onChange={(event) => setManualOwner(event.target.value)}>
+                    <option value="">선택</option>
+                    {ownerOptions.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+                <label>로케이션명<input type="text" placeholder="a-0001" /></label>
+                <label>품목코드<input type="text" placeholder="10000011" /></label>
+                <label>품목명<input type="text" placeholder="데모 베이직 반팔 니트" /></label>
+              </div>
+            </div>
+          </section>
+          <section className="table-toolbar doc-toolbar">
+            <div className="count-info">총 {formatNumber(manualViewRows.length)}건 / {formatNumber(manualSelected.size)}건 선택</div>
+            <div className="toolbar-actions">
+              <button type="button" className="chip" onClick={handleManualMove}>임의 이동</button>
+              <button type="button" className="chip" onClick={() => showToast("파일로 등록 팝업 실행")}>파일로 등록</button>
+            </div>
+          </section>
+          {!manualOwner ? (
+            <div className="empty-state bordered">데이터를 불러오기 위해, 검색 조건(화주사) 설정이 필요합니다.</div>
+          ) : (
+            <DocTableBlock
+              columns={["선택", "화주사", "품목코드", "품목명/품목 속성", "공급처", "로케이션", "유통기한", "로트번호", "가용", "예약", "검수대기", "불량", "특수"]}
+              rows={manualViewRows}
+              onRowClick={(row) => {
+                setManualSelected((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(row.__id)) next.delete(row.__id);
+                  else next.add(row.__id);
+                  return next;
+                });
+              }}
+            />
+          )}
+        </>
+      ) : null}
 
       <DocMetaBlock page={page} toast={toast} />
     </PageLayout>
@@ -2592,6 +4257,10 @@ function DocDemoPage() {
     "page-016": SlowMovingStockDoc,
     "r-stk-1001": LocationAvailabilityDoc,
     "r-stk-101": InOutListDoc,
+    "sm-stk-201": ItemStockListSellmateDoc,
+    "sm-stk-202": ItemBarcodePrintSellmateDoc,
+    "sm-stk-203": LocationStockListSellmateDoc,
+    "sm-stk-204": StockMovementSuiteSellmateDoc,
   };
 
   const Component = componentMap[page.pageKey];
