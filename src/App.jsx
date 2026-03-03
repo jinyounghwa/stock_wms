@@ -120,7 +120,7 @@ function sampleValue(column, rowIndex) {
   if (/상품코드/.test(column)) return `JT0093${String(80 + idx)}`;
   if (/스타일코드/.test(column)) return `JB003-KN0${(idx % 3) + 1}`;
   if (/브랜드/.test(column)) return ["MADE J", "NATURIA", "VINTAGE LAB"][idx % 3];
-  if (/화주/.test(column)) return ["화주사 A", "화주사 B"][idx % 2];
+  if (/화주사/.test(column)) return ["화주사 A", "화주사 B"][idx % 2];
   if (/창고/.test(column)) return ["메인센터", "서브센터"][idx % 2];
   if (/로케이션|위치/.test(column)) return `${String.fromCharCode(65 + (idx % 6))}-0${(idx % 8) + 1}-0${(idx % 6) + 1}`;
   if (/카테고리/.test(column)) return ["상의", "하의", "아우터"][idx % 3];
@@ -192,7 +192,7 @@ function SidebarNav({ showDocLinks, currentDocKey }) {
           <button type="button" className="menu-item">창고 현황 관리</button>
           <button type="button" className="menu-item">창고 레이아웃 관리</button>
           <button type="button" className="menu-item">보관위치 관리</button>
-          <button type="button" className="menu-item">화주 관리</button>
+          <button type="button" className="menu-item">화주사 관리</button>
         </div>
 
         <div className="menu-group">
@@ -337,7 +337,7 @@ function BaseInventoryPage() {
           <div className="filter-panel">
             <div className="filter-grid">
               <label>
-                화주
+                화주사
                 <select defaultValue="화주사 A">
                   <option>화주사 A</option>
                   <option>화주사 B</option>
@@ -972,7 +972,7 @@ function RegisteredProductsDoc({ page }) {
     if (!matched && !["입력 바코드/상품코드", "매칭 여부"].includes(column)) return "-";
 
     const map = {
-      화주: ["화주사 A", "화주사 B"][index % 2],
+      화주사: ["화주사 A", "화주사 B"][index % 2],
       창고: ["메인센터", "서브센터"][index % 2],
       브랜드: ["MADE J", "NATURIA"][index % 2],
       상품코드: `JT009${300 + index}`,
@@ -1246,7 +1246,7 @@ function WorkHistoryDoc({ page }) {
         <div className="search-top-row doc-compact">
           <div>
             <strong>검색 조건</strong>
-            <p>화주/창고/기준일/상품코드/바코드/실산상태 등 문서 기준 조건</p>
+            <p>화주사/창고/기준일/상품코드/바코드/실산상태 등 문서 기준 조건</p>
           </div>
           <div className="toolbar-actions">
             <button type="button" className="primary" onClick={() => showToast("검색 실행")}>검색</button>
@@ -1442,7 +1442,7 @@ function BatchHistoryDoc({ page }) {
         <div className="search-top-row doc-compact">
           <div>
             <strong>검색 필터</strong>
-            <p>기준일/화주/창고/조사차수/완료상태 기준 조회</p>
+            <p>기준일/화주사/창고/조사차수/완료상태 기준 조회</p>
           </div>
           <div className="toolbar-actions">
             <button type="button" className="primary" onClick={() => showToast("검색 실행")}>검색</button>
