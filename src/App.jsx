@@ -2866,18 +2866,13 @@ function InOutListDoc({ page }) {
   );
   const [typeFilter, setTypeFilter] = useState("전체");
   const [datePreset, setDatePreset] = useState("오늘");
-  const [useOrderFilter, setUseOrderFilter] = useState(false);
-  const [orderKeyword, setOrderKeyword] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState("50");
   const [pageNo, setPageNo] = useState(1);
 
-  const visibleRows = useMemo(() => {
-    const keywords = splitKeywords(orderKeyword);
-    return rows.filter((row) => (
-      (typeFilter === "전체" || row["입출고 유형"] === typeFilter)
-      && (!useOrderFilter || matchesKeyword(`${row.입출고번호} ${row.메모 || ""}`, keywords))
-    ));
-  }, [rows, typeFilter, useOrderFilter, orderKeyword]);
+  const visibleRows = useMemo(
+    () => rows.filter((row) => typeFilter === "전체" || row["입출고 유형"] === typeFilter),
+    [rows, typeFilter],
+  );
 
   const summary = useMemo(() => {
     const inbound = visibleRows
@@ -2911,8 +2906,6 @@ function InOutListDoc({ page }) {
         onReset={() => {
           setTypeFilter("전체");
           setDatePreset("오늘");
-          setUseOrderFilter(false);
-          setOrderKeyword("");
           setRowsPerPage("50");
           setPageNo(1);
           showToast("초기화");
@@ -2934,39 +2927,6 @@ function InOutListDoc({ page }) {
             </select>
           </label>
         </div>
-        <div className="mode-toggle">
-          {transactionTypes.slice(0, 4).map((type) => (
-            <button
-              key={type}
-              type="button"
-              className={`chip ${typeFilter === type ? "active-mode" : ""}`}
-              onClick={() => setTypeFilter(type)}
-            >
-              {type}
-            </button>
-          ))}
-          <button
-            type="button"
-            className={`chip ${useOrderFilter ? "active-mode" : ""}`}
-            onClick={() => setUseOrderFilter((prev) => !prev)}
-          >
-            + 필터추가: 오더번호
-          </button>
-          <Link className="chip" to="/docs/sm-stk-204">이동 오더/지시/실행 상세</Link>
-        </div>
-        {useOrderFilter ? (
-          <div className="filter-grid">
-            <label>
-              오더번호 키워드
-              <input
-                type="text"
-                value={orderKeyword}
-                onChange={(event) => setOrderKeyword(event.target.value)}
-                placeholder="이동 오더번호/입고 오더번호 등"
-              />
-            </label>
-          </div>
-        ) : null}
       </DocFilterBlock>
 
       <DocSummaryCards
@@ -2980,6 +2940,16 @@ function InOutListDoc({ page }) {
       <section className="table-toolbar doc-toolbar">
         <div className="count-info">입출고 목록 <strong>{formatNumber(visibleRows.length)}건</strong> (페이지 {safePageNo}/{totalPage})</div>
         <div className="toolbar-actions">
+          {["전체", "입고", "출고", "이동"].map((type) => (
+            <button
+              key={type}
+              type="button"
+              className={`chip ${typeFilter === type ? "active-mode" : ""}`}
+              onClick={() => setTypeFilter(type)}
+            >
+              {type}
+            </button>
+          ))}
           {page.actions.map((action) => (
             <button key={action} type="button" className="chip" onClick={() => showToast(`${action} 실행`)}>
               {action}
