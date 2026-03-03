@@ -2,3 +2,5 @@ node_modules/
 dist/
 .netlify/
 .DS_Store
+스크린샷 *.png
+스크린샷*.png

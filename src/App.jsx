@@ -77,7 +77,51 @@ function slugify(value) {
     .replace(/-{2,}/g, "-");
 }
 
-const DOC_PAGES = pageSpecs.pages.map((page, index) => {
+const EXTRA_PAGES = [
+  {
+    id: "R-STK-101",
+    code: "R-STK-101",
+    title: "입출고 목록",
+    pageTitle: "입출고 목록",
+    docPath: "이미지 요구사항 기반 추가 페이지",
+    menuGroup: "입출고 목록",
+    purpose: "상품의 입고/출고 현황, 내역, 창고 변경 이력을 조회하고 재고를 관리하는 메뉴",
+    fields: ["기간", "화주사", "창고", "입출고 유형", "상품코드", "바코드", "상태"],
+    actions: ["조회", "초기화", "엑셀 다운로드", "상세 보기"],
+    columnTables: [
+      {
+        section: "목록 컬럼",
+        columns: [
+          "입출고번호",
+          "입출고 유형",
+          "화주사",
+          "창고",
+          "상품코드",
+          "바코드",
+          "수량",
+          "변경 전 위치",
+          "변경 후 위치",
+          "처리일시",
+          "처리자",
+          "상태",
+        ],
+      },
+    ],
+    summaries: [
+      {
+        section: "요약",
+        items: [
+          { name: "총 입출고 건수", description: "조회 기간 내 입/출고 처리 건수" },
+          { name: "총 입고 수량", description: "입고 처리 수량 합계" },
+          { name: "총 출고 수량", description: "출고 처리 수량 합계" },
+        ],
+      },
+    ],
+    apis: [],
+  },
+];
+
+const DOC_PAGES = [...pageSpecs.pages, ...EXTRA_PAGES].map((page, index) => {
   const baseId = page.code || page.id || `PAGE-${String(index + 1).padStart(3, "0")}`;
   return {
     ...page,
@@ -2229,12 +2273,33 @@ function SlowMovingStockDoc({ page }) {
   );
   const [selectedId, setSelectedId] = useState("");
   const [historyRows, setHistoryRows] = useState(() => buildRows(historyColumns, 5));
+  const [activeGradeLabel, setActiveGradeLabel] = useState("주의 (90일+)");
 
   const filteredRows = useMemo(() => {
     if (gradeFilter === "90일 이상") return rows;
     if (gradeFilter === "180일 이상") return rows.filter((row) => row["부진 등급"] !== "주의 (90일+)");
     return rows.filter((row) => row["부진 등급"] === "위험 (365일+)");
   }, [rows, gradeFilter]);
+
+  const gradeStats = useMemo(() => {
+    const total = rows.length || 1;
+    const config = [
+      { label: "주의 (90일+)", short: "90일+", filter: "90일 이상", recommendation: "화주사 현황 공유" },
+      { label: "경고 (180일+)", short: "180일+", filter: "180일 이상", recommendation: "처리 방향 협의" },
+      { label: "위험 (365일+)", short: "365일+", filter: "365일 이상", recommendation: "할인/폐기/반품 우선 처리" },
+    ];
+    return config.map((item) => {
+      const count = rows.filter((row) => row["부진 등급"] === item.label).length;
+      const ratio = Math.round((count / total) * 100);
+      return { ...item, count, ratio };
+    });
+  }, [rows]);
+
+  const activeGrade = gradeStats.find((item) => item.label === activeGradeLabel) || gradeStats[0];
+
+  useEffect(() => {
+    if (!activeGrade && gradeStats.length) setActiveGradeLabel(gradeStats[0].label);
+  }, [activeGrade, gradeStats]);
 
   const markProcessing = () => {
     if (!selectedId) {
@@ -2260,7 +2325,7 @@ function SlowMovingStockDoc({ page }) {
 
       <section className="special-panel">
         <h3>부진 등급 차트</h3>
-        <p>등급별 분포를 기준으로 처리 대상을 선별합니다.</p>
+        <p>막대를 클릭하면 해당 등급 기준으로 즉시 필터링됩니다.</p>
         <div className="mode-toggle">
           {["90일 이상", "180일 이상", "365일 이상"].map((grade) => (
             <button key={grade} type="button" className={`chip ${gradeFilter === grade ? "active-mode" : ""}`} onClick={() => setGradeFilter(grade)}>
@@ -2268,10 +2333,32 @@ function SlowMovingStockDoc({ page }) {
             </button>
           ))}
         </div>
-        <div className="chart-bars">
-          <div><span>90일+</span><b style={{ width: "42%" }}>42%</b></div>
-          <div><span>180일+</span><b style={{ width: "27%" }}>27%</b></div>
-          <div><span>365일+</span><b style={{ width: "14%" }}>14%</b></div>
+        <div className="interactive-chart">
+          {gradeStats.map((stat) => (
+            <button
+              key={stat.label}
+              type="button"
+              className={`chart-row-btn ${activeGradeLabel === stat.label ? "active" : ""}`}
+              onMouseEnter={() => setActiveGradeLabel(stat.label)}
+              onClick={() => {
+                setActiveGradeLabel(stat.label);
+                setGradeFilter(stat.filter);
+              }}
+            >
+              <span className="chart-row-label">{stat.short}</span>
+              <div className="chart-row-track">
+                <b style={{ width: `${Math.max(stat.ratio, 6)}%` }}>{stat.ratio}%</b>
+              </div>
+              <span className="chart-row-count">{formatNumber(stat.count)}건</span>
+            </button>
+          ))}
+        </div>
+        <div className="chart-detail-card">
+          <div className="summary-name">선택 등급</div>
+          <div className="summary-value">{activeGrade?.short || "-"}</div>
+          <div className="summary-desc">
+            대상 {formatNumber(activeGrade?.count || 0)}건 · 권고 조치: {activeGrade?.recommendation || "-"}
+          </div>
         </div>
       </section>
 
@@ -2382,6 +2469,92 @@ function LocationAvailabilityDoc({ page }) {
   );
 }
 
+function InOutListDoc({ page }) {
+  const { toast, showToast } = useToast();
+  const columns = page.columnTables?.[0]?.columns?.length ? page.columnTables[0].columns : [];
+  const [rows, setRows] = useState(() =>
+    buildRows(columns, 12).map((row, index) => ({
+      ...row,
+      __id: `inout-${index + 1}`,
+      입출고번호: `IO-202603-${String(index + 1).padStart(4, "0")}`,
+      "입출고 유형": index % 2 ? "입고" : "출고",
+      화주사: ["화주사 A", "화주사 B"][index % 2],
+      창고: ["메인센터", "서브센터"][index % 2],
+      상품코드: `JT00${9300 + index}`,
+      바코드: `81231341295${String(40 + index).padStart(2, "0")}`,
+      수량: formatNumber(10 + index * 2),
+      "변경 전 위치": `${String.fromCharCode(65 + (index % 6))}-01-0${(index % 5) + 1}`,
+      "변경 후 위치": `${String.fromCharCode(66 + (index % 6))}-02-0${(index % 5) + 1}`,
+      처리일시: `2026-03-${String((index % 28) + 1).padStart(2, "0")} 11:${String((index * 6) % 60).padStart(2, "0")}`,
+      처리자: ["김작업", "이관리", "박검수"][index % 3],
+      상태: ["완료", "처리중", "대기"][index % 3],
+    })),
+  );
+  const [typeFilter, setTypeFilter] = useState("전체");
+
+  const visibleRows = useMemo(() => {
+    if (typeFilter === "전체") return rows;
+    return rows.filter((row) => row["입출고 유형"] === typeFilter);
+  }, [rows, typeFilter]);
+
+  const summary = useMemo(() => {
+    const inbound = visibleRows
+      .filter((row) => row["입출고 유형"] === "입고")
+      .reduce((sum, row) => sum + Number(String(row.수량 || "0").replace(/,/g, "")), 0);
+    const outbound = visibleRows
+      .filter((row) => row["입출고 유형"] === "출고")
+      .reduce((sum, row) => sum + Number(String(row.수량 || "0").replace(/,/g, "")), 0);
+    return { inbound, outbound };
+  }, [visibleRows]);
+
+  return (
+    <PageLayout tabTitle={page.title} showDocLinks currentDocKey={page.pageKey}>
+      <DocHeaderBlock page={page} />
+      <DocFilterBlock
+        page={page}
+        helperText="입고/출고 처리 내역 및 위치 변경 이력 조회"
+        onSearch={() => showToast("검색 실행")}
+        onReset={() => showToast("초기화")}
+      >
+        <div className="mode-toggle">
+          {["전체", "입고", "출고"].map((type) => (
+            <button
+              key={type}
+              type="button"
+              className={`chip ${typeFilter === type ? "active-mode" : ""}`}
+              onClick={() => setTypeFilter(type)}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      </DocFilterBlock>
+
+      <DocSummaryCards
+        items={[
+          { name: "총 입출고 건수", value: formatNumber(visibleRows.length), description: "조회 기간 내 처리 건수" },
+          { name: "총 입고 수량", value: formatNumber(summary.inbound), description: "입고 수량 합계" },
+          { name: "총 출고 수량", value: formatNumber(summary.outbound), description: "출고 수량 합계" },
+        ]}
+      />
+
+      <section className="table-toolbar doc-toolbar">
+        <div className="count-info">입출고 목록 <strong>{formatNumber(visibleRows.length)}건</strong></div>
+        <div className="toolbar-actions">
+          {page.actions.map((action) => (
+            <button key={action} type="button" className="chip" onClick={() => showToast(`${action} 실행`)}>
+              {action}
+            </button>
+          ))}
+        </div>
+      </section>
+      <DocTableBlock columns={columns} rows={visibleRows} />
+
+      <DocMetaBlock page={page} toast={toast} />
+    </PageLayout>
+  );
+}
+
 function DocDemoPage() {
   const { pageKey = "" } = useParams();
   const page = DOC_PAGES.find((item) => item.pageKey === pageKey);
@@ -2418,6 +2591,7 @@ function DocDemoPage() {
     "page-015": AdjustmentBatchListDoc,
     "page-016": SlowMovingStockDoc,
     "r-stk-1001": LocationAvailabilityDoc,
+    "r-stk-101": InOutListDoc,
   };
 
   const Component = componentMap[page.pageKey];
