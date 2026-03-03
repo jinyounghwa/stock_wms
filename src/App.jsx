@@ -179,7 +179,7 @@ function sampleValue(column, rowIndex) {
   if (/유형/.test(column)) return ["증가", "감소", "일반"][idx % 3];
   if (/유효기간/.test(column)) return `2026-12-${String((idx % 28) + 1).padStart(2, "0")}`;
   if (/담당자|처리자|승인자|요청자|등록자/.test(column)) return ["김작업", "이관리", "박검수"][idx % 3];
-  if (/SKU/.test(column)) return formatNumber(120 + idx);
+  if (/재고/.test(column)) return formatNumber(120 + idx);
   if (/상품명/.test(column)) return `[MADE] 데모 상품 ${idx}`;
 
   return `${column} ${idx}`;
@@ -1311,9 +1311,9 @@ function WorkHistoryDoc({ page }) {
 
       <div className="summary-grid summary-mini">
         <article className="summary-card">
-          <div className="summary-name">총 조회 SKU 수</div>
+          <div className="summary-name">총 조회 재고 수</div>
           <div className="summary-value">{formatNumber(summary.total)}</div>
-          <div className="summary-desc">검색 조건 기준 SKU</div>
+          <div className="summary-desc">검색 조건 기준 재고</div>
         </article>
         <article className="summary-card">
           <div className="summary-name">실산 완료 건수</div>
@@ -1323,7 +1323,7 @@ function WorkHistoryDoc({ page }) {
         <article className="summary-card">
           <div className="summary-name">미입력 건수</div>
           <div className="summary-value">{formatNumber(summary.pending)}</div>
-          <div className="summary-desc">실산 미입력 SKU</div>
+          <div className="summary-desc">실산 미입력 재고</div>
         </article>
       </div>
 
@@ -1332,7 +1332,7 @@ function WorkHistoryDoc({ page }) {
         <p>목록에서 상품을 선택한 뒤 실산수량/메모를 저장합니다.</p>
         <div className="entry-panel">
           <div className="entry-row">
-            <span>선택 SKU</span>
+            <span>선택 재고</span>
             <strong>{selectedRow?.상품코드 || selectedRow?.["상품코드"] || "-"}</strong>
           </div>
           <div className="entry-row">
@@ -1426,7 +1426,7 @@ function BatchHistoryDoc({ page }) {
       ...row,
       __id: `batch-${index + 1}`,
       "조사 차수": `2026-${index + 1}차`,
-      "조회 SKU 건수": formatNumber(240 + index * 13),
+      "조회 재고 건수": formatNumber(240 + index * 13),
       "실산 완료 건수": formatNumber(180 + index * 9),
       "미완료 건수": formatNumber(60 + index * 4),
       "완료율(%)": `${74 + index}%`,
@@ -1458,7 +1458,7 @@ function BatchHistoryDoc({ page }) {
   const summary = useMemo(() => {
     const totalBatch = visibleMasterRows.length;
     const totalSku = visibleMasterRows.reduce(
-      (sum, row) => sum + Number(String(row["조회 SKU 건수"] || "0").replace(/,/g, "")),
+      (sum, row) => sum + Number(String(row["조회 재고 건수"] || "0").replace(/,/g, "")),
       0,
     );
     const totalDone = visibleMasterRows.reduce(
@@ -1512,20 +1512,20 @@ function BatchHistoryDoc({ page }) {
           <div className="summary-desc">검색 결과 차수 건수</div>
         </article>
         <article className="summary-card">
-          <div className="summary-name">총 조회 SKU 건수</div>
+          <div className="summary-name">총 조회 재고 건수</div>
           <div className="summary-value">{formatNumber(summary.totalSku)}</div>
-          <div className="summary-desc">전체 차수 SKU 합계</div>
+          <div className="summary-desc">전체 차수 재고 합계</div>
         </article>
         <article className="summary-card">
           <div className="summary-name">전체 실산완료율(%)</div>
           <div className="summary-value">{summary.rate}%</div>
-          <div className="summary-desc">완료 SKU / 총 SKU</div>
+          <div className="summary-desc">완료 재고 / 총 재고</div>
         </article>
       </div>
 
       <section className="special-panel">
         <h3>차수별 집계 제어</h3>
-        <p>차수 행 클릭 시 SKU별 상세 내역을 하단에 드릴다운 표시합니다.</p>
+        <p>차수 행 클릭 시 재고별 상세 내역을 하단에 드릴다운 표시합니다.</p>
         <div className="scan-row">
           <button
             type="button"
@@ -1576,7 +1576,7 @@ function BatchHistoryDoc({ page }) {
 
       {detailColumns.length ? (
         <section className="drilldown-block">
-          <div className="drilldown-title">SKU별 상세 내역 (선택 차수 드릴다운)</div>
+          <div className="drilldown-title">재고별 상세 내역 (선택 차수 드릴다운)</div>
           <div className="doc-table-wrap">
             <table className="doc-table">
               <thead>
@@ -2031,7 +2031,7 @@ function LocationSurveyDoc({ page }) {
 
       <DocSummaryCards
         items={[
-          { name: "총 조사 건수", value: formatNumber(rows.length), description: "조회 대상 SKU" },
+          { name: "총 조사 건수", value: formatNumber(rows.length), description: "조회 대상 재고" },
           { name: "실재고 입력 건수", value: formatNumber(rows.filter((row) => row.상태 === "실재고입력").length), description: "입력 후 미완료" },
           { name: "조사완료 건수", value: formatNumber(rows.filter((row) => row.상태 === "조사완료").length), description: "확정 완료" },
         ]}
@@ -2214,7 +2214,7 @@ function AdjustmentBatchListDoc({ page }) {
       <DocSummaryCards
         items={[
           { name: "조회 기간 내 총 차수 수", value: formatNumber(masterRows.length), description: "조정 배치 건수" },
-          { name: "총 조정 SKU 건수", value: formatNumber(402), description: "전체 조정 SKU 합계" },
+          { name: "총 조정 재고 건수", value: formatNumber(402), description: "전체 조정 재고 합계" },
           { name: "순 재고 변동", value: "-78", description: "증가/감소 순합" },
         ]}
       />
@@ -2318,8 +2318,8 @@ function SlowMovingStockDoc({ page }) {
       <DocSummaryCards
         items={[
           { name: "부진재고 총 수량", value: formatNumber(16320), description: "필터 기준 수량 합계" },
-          { name: "365일+ SKU 수", value: formatNumber(rows.filter((row) => row["부진 등급"] === "위험 (365일+)").length), description: "우선 처리 필요" },
-          { name: "유효기간 임박 SKU 수", value: formatNumber(23), description: "30일 이내 만료 예정" },
+          { name: "365일+ 재고 수", value: formatNumber(rows.filter((row) => row["부진 등급"] === "위험 (365일+)").length), description: "우선 처리 필요" },
+          { name: "유효기간 임박 재고 수", value: formatNumber(23), description: "30일 이내 만료 예정" },
         ]}
       />
 
