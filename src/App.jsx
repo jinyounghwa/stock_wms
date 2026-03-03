@@ -783,6 +783,52 @@ function DocMetaBlock({ page, toast }) {
   );
 }
 
+function SearchCheckChips({ options, selectedSet, onToggle }) {
+  return (
+    <div className="search-check-list">
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          className={`search-check-chip ${selectedSet.has(option) ? "checked" : ""}`}
+          onClick={() => onToggle(option)}
+          aria-pressed={selectedSet.has(option)}
+        >
+          <span className="search-check-mark" aria-hidden="true" />
+          {option}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function getOwnerSelectValue(selectedSet, ownerOptions) {
+  if (selectedSet.size === 0) return "__NONE__";
+  if (selectedSet.size === ownerOptions.length) return "__ALL__";
+  if (selectedSet.size === 1) return [...selectedSet][0];
+  return "__MULTI__";
+}
+
+function OwnerSelectField({ ownerOptions, selectedSet, onSelect }) {
+  const currentValue = getOwnerSelectValue(selectedSet, ownerOptions);
+
+  return (
+    <div className="filter-grid owner-select-grid">
+      <label className="owner-select-field">
+        화주사 검색 (셀렉트)
+        <select value={currentValue} onChange={(event) => onSelect(event.target.value)}>
+          <option value="__ALL__">전체</option>
+          <option value="__NONE__">미선택</option>
+          {ownerOptions.map((owner) => (
+            <option key={owner} value={owner}>{owner}</option>
+          ))}
+          {currentValue === "__MULTI__" ? <option value="__MULTI__" disabled>다중 선택</option> : null}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 function IndividualInboundDoc({ page }) {
   const { toast, showToast } = useToast();
   const columns = page.columnTables?.[0]?.columns?.length ? page.columnTables[0].columns : [];
@@ -3009,6 +3055,14 @@ function ItemStockListSellmateDoc({ page }) {
     setPageNo(1);
   };
 
+  const selectOwner = (value) => {
+    if (value === "__MULTI__") return;
+    if (value === "__ALL__") setSelectedOwners(new Set(ownerOptions));
+    else if (value === "__NONE__") setSelectedOwners(new Set());
+    else setSelectedOwners(new Set([value]));
+    setPageNo(1);
+  };
+
   const resetFilters = () => {
     setSelectedOwners(new Set());
     setItemCodeQuery("");
@@ -3073,14 +3127,8 @@ function ItemStockListSellmateDoc({ page }) {
           </div>
         </div>
         <div className="filter-panel doc-open">
-          <div className="owner-checks">
-            {ownerOptions.map((owner) => (
-              <label key={owner}>
-                <input type="checkbox" checked={selectedOwners.has(owner)} onChange={() => toggleOwner(owner)} />
-                {owner}
-              </label>
-            ))}
-          </div>
+          <OwnerSelectField ownerOptions={ownerOptions} selectedSet={selectedOwners} onSelect={selectOwner} />
+          <SearchCheckChips options={ownerOptions} selectedSet={selectedOwners} onToggle={toggleOwner} />
           <div className="filter-grid">
             <label>
               품목 코드
@@ -3293,6 +3341,13 @@ function ItemBarcodePrintSellmateDoc({ page }) {
     });
   };
 
+  const selectOwner = (value) => {
+    if (value === "__MULTI__") return;
+    if (value === "__ALL__") setSelectedOwners(new Set(ownerOptions));
+    else if (value === "__NONE__") setSelectedOwners(new Set());
+    else setSelectedOwners(new Set([value]));
+  };
+
   const toggleSupplier = (supplier) => {
     setSelectedSuppliers((prev) => {
       const next = new Set(prev);
@@ -3355,14 +3410,8 @@ function ItemBarcodePrintSellmateDoc({ page }) {
           </div>
         </div>
         <div className="filter-panel doc-open">
-          <div className="owner-checks">
-            {ownerOptions.map((owner) => (
-              <label key={owner}>
-                <input type="checkbox" checked={selectedOwners.has(owner)} onChange={() => toggleOwner(owner)} />
-                {owner}
-              </label>
-            ))}
-          </div>
+          <OwnerSelectField ownerOptions={ownerOptions} selectedSet={selectedOwners} onSelect={selectOwner} />
+          <SearchCheckChips options={ownerOptions} selectedSet={selectedOwners} onToggle={toggleOwner} />
           <div className="filter-grid">
             <label>
               품목 코드
@@ -3549,6 +3598,14 @@ function LocationStockListSellmateDoc({ page }) {
     setPageNo(1);
   };
 
+  const selectOwner = (value) => {
+    if (value === "__MULTI__") return;
+    if (value === "__ALL__") setSelectedOwners(new Set(ownerOptions));
+    else if (value === "__NONE__") setSelectedOwners(new Set());
+    else setSelectedOwners(new Set([value]));
+    setPageNo(1);
+  };
+
   const resetFilters = () => {
     setSelectedOwners(new Set(["onedns_test"]));
     setLocationQuery("");
@@ -3616,14 +3673,8 @@ function LocationStockListSellmateDoc({ page }) {
           </div>
         </div>
         <div className="filter-panel doc-open">
-          <div className="owner-checks">
-            {ownerOptions.map((owner) => (
-              <label key={owner}>
-                <input type="checkbox" checked={selectedOwners.has(owner)} onChange={() => toggleOwner(owner)} />
-                {owner}
-              </label>
-            ))}
-          </div>
+          <OwnerSelectField ownerOptions={ownerOptions} selectedSet={selectedOwners} onSelect={selectOwner} />
+          <SearchCheckChips options={ownerOptions} selectedSet={selectedOwners} onToggle={toggleOwner} />
           <div className="filter-grid">
             <label>
               로케이션명

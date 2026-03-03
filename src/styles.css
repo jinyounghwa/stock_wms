@@ -283,6 +283,18 @@ select {
   color: #7a8699;
 }
 
+.owner-select-grid {
+  grid-template-columns: minmax(220px, 360px);
+  margin-bottom: 8px;
+}
+
+.owner-select-field {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: #7a8699;
+}
+
 .check-field {
   display: flex;
   gap: 6px;
@@ -324,18 +336,22 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid #dbe4ef;
+  min-height: 34px;
+  border: 1px solid #d3dfed;
   background: #fff;
-  color: #60718b;
+  color: #546880;
   border-radius: 999px;
-  padding: 6px 11px;
+  padding: 7px 12px;
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
 }
 
 .search-check-chip:hover {
-  border-color: #bcd2ee;
-  background: #f7fbff;
+  border-color: #b5cff1;
+  background: #f6faff;
+  box-shadow: 0 1px 4px rgba(34, 111, 207, 0.12);
 }
 
 .search-check-mark {
@@ -348,9 +364,10 @@ select {
 }
 
 .search-check-chip.checked {
-  border-color: #9dc3f2;
-  background: #eef6ff;
-  color: #245fa6;
+  border-color: #8dbcf3;
+  background: linear-gradient(180deg, #f4f9ff, #e9f3ff);
+  color: #1f5da9;
+  box-shadow: 0 1px 5px rgba(34, 111, 207, 0.18);
 }
 
 .search-check-chip.checked .search-check-mark {
