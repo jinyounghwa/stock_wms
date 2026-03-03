@@ -313,6 +313,63 @@ select {
   margin-top: 10px;
 }
 
+.search-check-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.search-check-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #dbe4ef;
+  background: #fff;
+  color: #60718b;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.search-check-chip:hover {
+  border-color: #bcd2ee;
+  background: #f7fbff;
+}
+
+.search-check-mark {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid #b8c8dd;
+  background: #fff;
+  position: relative;
+}
+
+.search-check-chip.checked {
+  border-color: #9dc3f2;
+  background: #eef6ff;
+  color: #245fa6;
+}
+
+.search-check-chip.checked .search-check-mark {
+  border-color: #2e86f5;
+  background: #2e86f5;
+}
+
+.search-check-chip.checked .search-check-mark::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 .active-tags {
   display: flex;
   gap: 6px;

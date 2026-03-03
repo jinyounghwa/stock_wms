@@ -943,12 +943,17 @@ function BarcodeInboundDoc({ page }) {
           showToast("초기화");
         }}
       >
-        <div className="owner-checks">
+        <div className="search-check-list">
           {ownerOptions.map((owner) => (
-            <label key={owner}>
-              <input type="checkbox" checked={selectedOwners.has(owner)} onChange={() => toggleOwner(owner)} />
+            <button
+              key={owner}
+              type="button"
+              className={`search-check-chip ${selectedOwners.has(owner) ? "checked" : ""}`}
+              onClick={() => toggleOwner(owner)}
+            >
+              <span className="search-check-mark" aria-hidden="true" />
               {owner}
-            </label>
+            </button>
           ))}
         </div>
       </DocFilterBlock>
