@@ -1924,6 +1924,19 @@
   background: #f5f9ff;
 }
 
+.nw-survey-input-preview {
+  cursor: default;
+  border-style: dashed;
+}
+
+.nw-survey-input-result {
+  margin-top: 12px;
+}
+
+.nw-survey-input-empty {
+  margin-top: 0;
+}
+
 .nw-mobile-product-head {
   display: grid;
   grid-template-columns: 66px minmax(0, 1fr) auto;

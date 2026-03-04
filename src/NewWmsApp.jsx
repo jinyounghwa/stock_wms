@@ -641,8 +641,29 @@ function statusClass(status) {
   return "muted";
 }
 
-function findProductByBarcode(barcode) {
-  return PRODUCT_MASTER.find((product) => product.barcode === barcode);
+function normalizeLookupValue(value) {
+  return String(value ?? "").trim();
+}
+
+function findProductByBarcode(barcode, owner = "") {
+  const normalizedBarcode = normalizeLookupValue(barcode);
+  if (!normalizedBarcode) return undefined;
+
+  return PRODUCT_MASTER.find((product) => (
+    product.barcode === normalizedBarcode
+    && (!owner || owner === "ALL" || product.owner === owner)
+  ));
+}
+
+function findProductByLookup(value, owner = "") {
+  const normalized = normalizeLookupValue(value);
+  if (!normalized) return undefined;
+
+  const lower = normalized.toLowerCase();
+  return PRODUCT_MASTER.find((product) => (
+    (!owner || owner === "ALL" || product.owner === owner)
+    && (product.barcode === normalized || product.id.toLowerCase() === lower)
+  ));
 }
 
 function SidebarLayout({ title, children }) {
@@ -2796,15 +2817,54 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
   const [uploadPreview, setUploadPreview] = useState([]);
   const [listFilter, setListFilter] = useState({ owner: "ALL", round: "ALL", status: "ALL" });
   const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [individualResult, setIndividualResult] = useState(null);
+  const [scanResult, setScanResult] = useState(null);
+
+  const findProductByLocationCode = (locationCode, owner = "") => {
+    const normalizedLocationCode = normalizeLookupValue(locationCode).toLowerCase();
+    if (!normalizedLocationCode) return undefined;
+    return PRODUCT_MASTER.find((product) => (
+      (!owner || owner === "ALL" || product.owner === owner)
+      && product.locations.some((location) => location.code.toLowerCase().includes(normalizedLocationCode))
+    ));
+  };
+
+  const pickFallbackProduct = (owner, seedText) => {
+    const ownerProducts = PRODUCT_MASTER.filter((product) => !owner || owner === "ALL" || product.owner === owner);
+    const pool = ownerProducts.length ? ownerProducts : PRODUCT_MASTER;
+    if (!pool.length) return undefined;
+
+    const seed = normalizeLookupValue(seedText);
+    if (!seed) return pool[0];
+    const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return pool[hash % pool.length];
+  };
+
+  const resolveInputProduct = ({ barcode = "", locationCode = "", owner = "" }) => (
+    findProductByLookup(barcode, owner)
+    || findProductByLocationCode(barcode, owner)
+    || findProductByLookup(locationCode, owner)
+    || findProductByLocationCode(locationCode, owner)
+    || pickFallbackProduct(owner, `${barcode}|${locationCode}`)
+  );
+
+  const makeLookupResult = ({ barcode, locationCode, owner }) => {
+    const normalizedBarcode = normalizeLookupValue(barcode);
+    const normalizedLocationCode = normalizeLookupValue(locationCode);
+    const product = resolveInputProduct({ barcode: normalizedBarcode, locationCode: normalizedLocationCode, owner });
+    return { barcode: normalizedBarcode, locationCode: normalizedLocationCode, owner, product };
+  };
 
   const createEntry = ({ owner, round, barcode, locationCode, qty, memo, source }) => {
-    const product = findProductByBarcode(barcode);
+    const normalizedBarcode = normalizeLookupValue(barcode);
+    const normalizedLocationCode = normalizeLookupValue(locationCode);
+    const product = resolveInputProduct({ barcode: normalizedBarcode, locationCode: normalizedLocationCode, owner });
     return {
       id: `survey-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       owner,
       round,
-      barcode,
-      locationCode,
+      barcode: normalizedBarcode,
+      locationCode: normalizedLocationCode,
       qty: toNumber(qty),
       memo,
       source,
@@ -2817,46 +2877,61 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
   };
 
   const addIndividual = () => {
-    if (!individualForm.owner || !individualForm.round || !individualForm.barcode || !individualForm.locationCode || toNumber(individualForm.qty) <= 0) {
+    const normalizedBarcode = normalizeLookupValue(individualForm.barcode);
+    if (!individualForm.owner || !individualForm.round || !normalizedBarcode || !individualForm.locationCode || toNumber(individualForm.qty) <= 0) {
       showToast("화주사/차수/바코드/로케이션/수량을 입력하세요.");
       return;
     }
 
-    setSurveyEntries((prev) => [createEntry({ ...individualForm, source: "개별입력" }), ...prev]);
+    setIndividualResult(
+      makeLookupResult({
+        barcode: normalizedBarcode,
+        locationCode: individualForm.locationCode,
+        owner: individualForm.owner,
+      }),
+    );
+    setSurveyEntries((prev) => [createEntry({ ...individualForm, barcode: normalizedBarcode, source: "개별입력" }), ...prev]);
     setIndividualForm((prev) => ({ ...prev, barcode: "", locationCode: "", qty: "", memo: "" }));
     showToast("조사 재고를 임시 목록에 추가했습니다.");
   };
 
   const addScan = () => {
-    if (!scanForm.owner || !scanForm.locationCode || !scanForm.barcode.trim()) {
+    const normalizedBarcode = normalizeLookupValue(scanForm.barcode);
+    if (!scanForm.owner || !scanForm.locationCode || !normalizedBarcode) {
       showToast("화주사/로케이션/바코드를 입력하세요.");
       return;
     }
 
+    setScanResult(
+      makeLookupResult({
+        barcode: normalizedBarcode,
+        locationCode: scanForm.locationCode,
+        owner: scanForm.owner,
+      }),
+    );
     if (scanForm.mode === "자동누산") {
-      let merged = false;
-      setSurveyEntries((prev) => prev.map((entry) => {
-        if (!merged && entry.status === "조사중" && entry.barcode === scanForm.barcode.trim() && entry.locationCode === scanForm.locationCode) {
-          merged = true;
-          return { ...entry, qty: entry.qty + 1 };
+      setSurveyEntries((prev) => {
+        const index = prev.findIndex(
+          (entry) => entry.status === "조사중" && entry.barcode === normalizedBarcode && entry.locationCode === scanForm.locationCode,
+        );
+        if (index >= 0) {
+          const next = [...prev];
+          next[index] = { ...next[index], qty: next[index].qty + 1 };
+          return next;
         }
-        return entry;
-      }));
-
-      if (!merged) {
-        setSurveyEntries((prev) => [
+        return [
           createEntry({
             owner: scanForm.owner,
             round: "2026-03-1차",
-            barcode: scanForm.barcode.trim(),
+            barcode: normalizedBarcode,
             locationCode: scanForm.locationCode,
             qty: 1,
             memo: "",
             source: "바코드스캔",
           }),
           ...prev,
-        ]);
-      }
+        ];
+      });
     } else {
       if (toNumber(scanForm.qty) <= 0) {
         showToast("단위 입력 모드에서는 수량이 필요합니다.");
@@ -2866,7 +2941,7 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
         createEntry({
           owner: scanForm.owner,
           round: "2026-03-1차",
-          barcode: scanForm.barcode.trim(),
+          barcode: normalizedBarcode,
           locationCode: scanForm.locationCode,
           qty: toNumber(scanForm.qty),
           memo: "",
@@ -2976,7 +3051,16 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
             </label>
             <label>
               바코드
-              <input value={individualForm.barcode} onChange={(event) => setIndividualForm((prev) => ({ ...prev, barcode: event.target.value }))} />
+              <input
+                value={individualForm.barcode}
+                onChange={(event) => setIndividualForm((prev) => ({ ...prev, barcode: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addIndividual();
+                  }
+                }}
+              />
             </label>
             <label>
               로케이션
@@ -2994,6 +3078,35 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
           <div className="nw-panel-actions">
             <button type="button" className="nw-btn primary" onClick={addIndividual}>행 추가</button>
           </div>
+          {individualResult ? (
+            <div className="nw-survey-input-result">
+              <div className="nw-panel-title-row mini">
+                <h4>입력 상품</h4>
+              </div>
+              {individualResult.product ? (
+                <article className="nw-mobile-card compact nw-survey-input-preview">
+                  <div className="nw-mobile-product-head">
+                    <div className={`nw-thumb ${getToneClass(individualResult.product.tone)}`} />
+                    <div>
+                      <strong>{individualResult.product.name}</strong>
+                      <span>{individualResult.product.option}</span>
+                      <span>{individualResult.product.barcode}</span>
+                      <span className="brand">{individualResult.product.brand}</span>
+                      <span className="nw-product-tag">{individualResult.product.owner}</span>
+                    </div>
+                    <div className="qty">
+                      <span>{formatNumber(individualResult.product.locations.reduce((sum, location) => sum + location.qty, 0))}개</span>
+                    </div>
+                  </div>
+                </article>
+              ) : (
+                <div className="nw-mobile-empty compact nw-survey-input-empty">
+                  <strong>입력한 값과 일치하는 상품이 없습니다.</strong>
+                  <p>입력값: {individualResult.barcode}</p>
+                </div>
+              )}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -3019,7 +3132,17 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
             </label>
             <label>
               바코드
-              <input value={scanForm.barcode} onChange={(event) => setScanForm((prev) => ({ ...prev, barcode: event.target.value }))} placeholder="스캔값 입력" />
+              <input
+                value={scanForm.barcode}
+                onChange={(event) => setScanForm((prev) => ({ ...prev, barcode: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addScan();
+                  }
+                }}
+                placeholder="스캔값 입력"
+              />
             </label>
             {scanForm.mode === "단위입력" ? (
               <label>
@@ -3031,6 +3154,35 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
           <div className="nw-panel-actions">
             <button type="button" className="nw-btn primary" onClick={addScan}>스캔 반영</button>
           </div>
+          {scanResult ? (
+            <div className="nw-survey-input-result">
+              <div className="nw-panel-title-row mini">
+                <h4>스캔 상품</h4>
+              </div>
+              {scanResult.product ? (
+                <article className="nw-mobile-card compact nw-survey-input-preview">
+                  <div className="nw-mobile-product-head">
+                    <div className={`nw-thumb ${getToneClass(scanResult.product.tone)}`} />
+                    <div>
+                      <strong>{scanResult.product.name}</strong>
+                      <span>{scanResult.product.option}</span>
+                      <span>{scanResult.product.barcode}</span>
+                      <span className="brand">{scanResult.product.brand}</span>
+                      <span className="nw-product-tag">{scanResult.product.owner}</span>
+                    </div>
+                    <div className="qty">
+                      <span>{formatNumber(scanResult.product.locations.reduce((sum, location) => sum + location.qty, 0))}개</span>
+                    </div>
+                  </div>
+                </article>
+              ) : (
+                <div className="nw-mobile-empty compact nw-survey-input-empty">
+                  <strong>입력한 값과 일치하는 상품이 없습니다.</strong>
+                  <p>입력값: {scanResult.barcode}</p>
+                </div>
+              )}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
