@@ -1,10 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
+import NewWmsApp from "./NewWmsApp";
 import "./styles.css";
+import "./new-wms.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <NewWmsApp />
   </React.StrictMode>,
 );
