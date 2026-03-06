@@ -4659,6 +4659,7 @@ function InventorySurveyPage({ surveyEntries, setSurveyEntries, adjustments, set
 
 function InventoryAdjustmentPage({ adjustments, setAdjustments }) {
   const { toast, showToast } = useToast();
+  const [adjustmentRole, setAdjustmentRole] = useState("worker");
 
   const adjustmentStats = useMemo(() => ({
     total: adjustments.length,
@@ -4697,12 +4698,38 @@ function InventoryAdjustmentPage({ adjustments, setAdjustments }) {
             </article>
           </div>
           <div className="nw-survey-guide">
-            <strong>웹 관리자 화면</strong>
-            <span>요청 일괄 승인/반려 및 이력 검토</span>
+            <strong>{adjustmentRole === "worker" ? "웹 작업자 화면" : "웹 관리자 화면"}</strong>
+            <span>{adjustmentRole === "worker" ? "위치 선택 > 상품 선택 > 조정 요청/재요청" : "요청 일괄 승인/반려 및 이력 검토"}</span>
           </div>
         </section>
 
-        <AdminAdjustmentPanel adjustments={adjustments} setAdjustments={setAdjustments} showToast={showToast} />
+        <section className="nw-panel nw-adjust-role-panel">
+          <div className="nw-panel-title-row">
+            <h3>재고 조정 역할 선택</h3>
+            <div className="nw-btn-row">
+              <button
+                type="button"
+                className={`nw-btn tiny ${adjustmentRole === "worker" ? "active" : ""}`}
+                onClick={() => setAdjustmentRole("worker")}
+              >
+                작업자 화면
+              </button>
+              <button
+                type="button"
+                className={`nw-btn tiny ${adjustmentRole === "admin" ? "active" : ""}`}
+                onClick={() => setAdjustmentRole("admin")}
+              >
+                관리자 화면
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {adjustmentRole === "worker" ? (
+          <WorkerAdjustmentPanel adjustments={adjustments} setAdjustments={setAdjustments} showToast={showToast} />
+        ) : (
+          <AdminAdjustmentPanel adjustments={adjustments} setAdjustments={setAdjustments} showToast={showToast} />
+        )}
       </div>
 
       <GlobalToast message={toast} />
