@@ -855,7 +855,7 @@ function SlowMovingBasePage({
     brand: "ALL",
     query: "",
   });
-  const [viewMode, setViewMode] = useState("visual");
+  const [viewMode, setViewMode] = useState("list");
   const [selectedSkuId, setSelectedSkuId] = useState("sku-001");
   const [selectedLocationCode, setSelectedLocationCode] = useState("");
   const [routeSourceCode, setRouteSourceCode] = useState("");
@@ -1573,7 +1573,7 @@ function SlowMovingBasePage({
       brand: "ALL",
       query: "",
     });
-    setViewMode("visual");
+    setViewMode("list");
     setSelectedLocationCode("");
     setRouteSourceCode("");
     setRouteTargetCode("");
@@ -1614,7 +1614,7 @@ function SlowMovingBasePage({
             </select>
           </label>
           <label>
-            구역(존)
+            존
             <select value={filters.zone} onChange={(event) => setFilters((prev) => ({ ...prev, zone: event.target.value }))}>
               {ZONE_OPTIONS.map((option) => <option key={option}>{option}</option>)}
             </select>
@@ -1704,15 +1704,14 @@ function SlowMovingBasePage({
                   <th>화주사</th>
                   <th>상품명</th>
                   <th>옵션명</th>
+                  <th>존</th>
+                  <th>구역</th>
                   <th>위치</th>
                   <th>시즌</th>
-                  <th>최근 입고일</th>
                   <th>최근 출고일</th>
-                  <th>재고수량</th>
-                  <th>예약 재고</th>
-                  <th>SKU 합계</th>
-                  <th>위치 비중</th>
-                  <th>부진 등급</th>
+                  <th>최근 입고일</th>
+                  <th>가용 재고 수량</th>
+                  <th>예약 재고 수량</th>
                 </tr>
               </thead>
               <tbody>
@@ -1728,18 +1727,14 @@ function SlowMovingBasePage({
                     <td>{row.owner}</td>
                     <td>{row.productName}</td>
                     <td>{row.optionName}</td>
-                    <td>
-                      <span className="nw-zone-chip">{row.zone}</span>
-                      {row.locationCode}
-                    </td>
+                    <td><span className="nw-zone-chip">{row.zone}</span></td>
+                    <td>{row.area}</td>
+                    <td>{row.locationCode}</td>
                     <td><span className="nw-season-chip">{row.season}</span></td>
-                    <td>{row.lastInboundDate}</td>
                     <td>{row.lastOutboundDate}</td>
+                    <td>{row.lastInboundDate}</td>
                     <td>{formatNumber(row.availableQty)}</td>
                     <td>{formatNumber(row.reservedQty)}</td>
-                    <td>{formatNumber(row.skuTotalQty)}</td>
-                    <td>{row.locationRatio.toFixed(1)}%</td>
-                    <td><span className={`nw-grade-badge ${row.grade.className}`}>{row.grade.label}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -1979,12 +1974,9 @@ function LocationStockPage() {
   const { toast, showToast } = useToast();
   const [filters, setFilters] = useState({
     owner: "ALL",
-    center: "ALL",
     zone: "ALL",
     area: "ALL",
-    query: "",
-    minStock: "",
-    maxStock: "",
+    location: "",
     minAvailable: "",
     maxAvailable: "",
     minReserved: "",
@@ -1995,8 +1987,9 @@ function LocationStockPage() {
   const [viewMode, setViewMode] = useState("list");
   const [sortType, setSortType] = useState("기본");
   const [focusLocationId, setFocusLocationId] = useState("");
-  const [scanLocationCode, setScanLocationCode] = useState("");
-  const [scannedLocationId, setScannedLocationId] = useState("");
+  const [selectedRowIds, setSelectedRowIds] = useState(() => new Set());
+  const [expandedRowIds, setExpandedRowIds] = useState(() => new Set());
+  const selectAllRef = useRef(null);
 
   const sourceRows = useMemo(
     () =>
@@ -2008,12 +2001,15 @@ function LocationStockPage() {
     [],
   );
 
+  const ownerOptions = useMemo(() => ["ALL", ...new Set(sourceRows.map((row) => row.owner))], [sourceRows]);
+  const zoneOptions = useMemo(() => ["ALL", ...new Set(sourceRows.map((row) => row.zone))], [sourceRows]);
+
   const areaOptions = useMemo(() => {
     const list = sourceRows
-      .filter((row) => (filters.center === "ALL" || row.center === filters.center) && (filters.zone === "ALL" || row.zone === filters.zone))
+      .filter((row) => (filters.owner === "ALL" || row.owner === filters.owner) && (filters.zone === "ALL" || row.zone === filters.zone))
       .map((row) => row.areaCode);
     return ["ALL", ...new Set(list)];
-  }, [sourceRows, filters.center, filters.zone]);
+  }, [sourceRows, filters.owner, filters.zone]);
 
   useEffect(() => {
     if (filters.area !== "ALL" && !areaOptions.includes(filters.area)) {
@@ -2023,15 +2019,12 @@ function LocationStockPage() {
 
   const filteredRows = useMemo(
     () => sourceRows.filter((row) => {
-      const query = filters.query.trim().toLowerCase();
+      const query = filters.location.trim().toLowerCase();
       const target = `${row.locationCode} ${row.areaCode} ${row.center} ${row.zone} ${row.owner}`.toLowerCase();
       if (filters.owner !== "ALL" && row.owner !== filters.owner) return false;
-      if (filters.center !== "ALL" && row.center !== filters.center) return false;
       if (filters.zone !== "ALL" && row.zone !== filters.zone) return false;
       if (filters.area !== "ALL" && row.areaCode !== filters.area) return false;
       if (query && !target.includes(query)) return false;
-      if (filters.minStock !== "" && row.stock < toNumber(filters.minStock)) return false;
-      if (filters.maxStock !== "" && row.stock > toNumber(filters.maxStock)) return false;
       if (filters.minAvailable !== "" && row.available < toNumber(filters.minAvailable)) return false;
       if (filters.maxAvailable !== "" && row.available > toNumber(filters.maxAvailable)) return false;
       if (filters.minReserved !== "" && row.reserved < toNumber(filters.minReserved)) return false;
@@ -2043,232 +2036,10 @@ function LocationStockPage() {
     [filters, sourceRows],
   );
 
-  useEffect(() => {
-    if (!filteredRows.length) {
-      setFocusLocationId("");
-      return;
-    }
-    if (!focusLocationId || !filteredRows.some((row) => row.id === focusLocationId)) {
-      setFocusLocationId(filteredRows[0].id);
-    }
-  }, [filteredRows, focusLocationId]);
-
-  const summary = useMemo(() => {
-    const total = filteredRows.reduce((sum, row) => sum + row.stock, 0);
-    const available = filteredRows.reduce((sum, row) => sum + row.available, 0);
-    const reserved = filteredRows.reduce((sum, row) => sum + row.reserved, 0);
-    const locationCount = filteredRows.length;
-    const avgUtil = locationCount
-      ? filteredRows.reduce((sum, row) => sum + row.util, 0) / locationCount
-      : 0;
-    return { total, available, reserved, locationCount, avgUtil };
-  }, [filteredRows]);
-
-  const centerSummary = useMemo(() => {
-    const map = {};
-    filteredRows.forEach((row) => {
-      if (!map[row.center]) map[row.center] = { center: row.center, total: 0, reserved: 0, count: 0 };
-      map[row.center].total += row.stock;
-      map[row.center].reserved += row.reserved;
-      map[row.center].count += 1;
-    });
-    return Object.values(map);
-  }, [filteredRows]);
-
-  const utilDistribution = useMemo(() => {
-    const source = [
-      { label: "0%", min: 0, max: 0, value: 0 },
-      { label: "1~30%", min: 0.01, max: 30, value: 0 },
-      { label: "31~60%", min: 30.01, max: 60, value: 0 },
-      { label: "61~90%", min: 60.01, max: 90, value: 0 },
-      { label: "91~100%", min: 90.01, max: 100, value: 0 },
-    ];
-
-    filteredRows.forEach((row) => {
-      const bucket = source.find((item) => row.util >= item.min && row.util <= item.max);
-      if (bucket) bucket.value += 1;
-    });
-
-    return source;
-  }, [filteredRows]);
-
-  const hotSpots = useMemo(() => [...filteredRows]
-    .sort((a, b) => b.util - a.util)
-    .slice(0, 5), [filteredRows]);
-
-  const centerStackData = useMemo(() => ({
-    labels: centerSummary.map((item) => item.center),
-    datasets: [
-      {
-        label: "즉시출고 가능",
-        data: centerSummary.map((item) => Math.max(item.total - item.reserved, 0)),
-        backgroundColor: CHART_COLORS.blue,
-        borderRadius: 6,
-        borderSkipped: false,
-      },
-      {
-        label: "보류",
-        data: centerSummary.map((item) => item.reserved),
-        backgroundColor: CHART_COLORS.amber,
-        borderRadius: 6,
-        borderSkipped: false,
-      },
-    ],
-  }), [centerSummary]);
-
-  const utilDistributionData = useMemo(() => ({
-    labels: utilDistribution.map((item) => item.label),
-    datasets: [
-      {
-        label: "위치 수",
-        data: utilDistribution.map((item) => item.value),
-        backgroundColor: ["#f0f4fa", "#dbeaff", "#b8d6ff", "#86b8ff", "#4a99ff"],
-        borderWidth: 0,
-      },
-    ],
-  }), [utilDistribution]);
-
-  const hotspotLineData = useMemo(() => ({
-    labels: hotSpots.map((item) => item.locationCode),
-    datasets: [
-      {
-        label: "점유율(%)",
-        data: hotSpots.map((item) => Number(item.util.toFixed(1))),
-        borderColor: CHART_COLORS.red,
-        backgroundColor: "rgba(224, 75, 75, 0.16)",
-        pointRadius: 3,
-        fill: true,
-        tension: 0.3,
-      },
-      {
-        label: "예약 수량",
-        data: hotSpots.map((item) => item.reserved),
-        borderColor: CHART_COLORS.amber,
-        backgroundColor: "rgba(242, 163, 65, 0.16)",
-        pointRadius: 3,
-        fill: true,
-        tension: 0.3,
-      },
-    ],
-  }), [hotSpots]);
-
-  const zoneUtilSummary = useMemo(() => {
-    const map = {};
-    filteredRows.forEach((row) => {
-      if (!map[row.zone]) map[row.zone] = { zone: row.zone, utilTotal: 0, available: 0, count: 0 };
-      map[row.zone].utilTotal += row.util;
-      map[row.zone].available += row.available;
-      map[row.zone].count += 1;
-    });
-    return Object.values(map).map((item) => ({
-      ...item,
-      avgUtil: item.count ? item.utilTotal / item.count : 0,
-    }));
-  }, [filteredRows]);
-
-  const areaSummary = useMemo(() => {
-    const map = {};
-    filteredRows.forEach((row) => {
-      if (!map[row.areaCode]) {
-        map[row.areaCode] = {
-          areaCode: row.areaCode,
-          available: 0,
-          reserved: 0,
-          stock: 0,
-          count: 0,
-        };
-      }
-      map[row.areaCode].available += row.available;
-      map[row.areaCode].reserved += row.reserved;
-      map[row.areaCode].stock += row.stock;
-      map[row.areaCode].count += 1;
-    });
-    return Object.values(map).sort((a, b) => b.stock - a.stock).slice(0, 8);
-  }, [filteredRows]);
-
-  const ownerSummary = useMemo(() => {
-    const map = {};
-    filteredRows.forEach((row) => {
-      if (!map[row.owner]) {
-        map[row.owner] = {
-          owner: row.owner,
-          utilTotal: 0,
-          stock: 0,
-          reserved: 0,
-          count: 0,
-        };
-      }
-      map[row.owner].utilTotal += row.util;
-      map[row.owner].stock += row.stock;
-      map[row.owner].reserved += row.reserved;
-      map[row.owner].count += 1;
-    });
-    return Object.values(map).map((item) => ({
-      ...item,
-      avgUtil: item.count ? item.utilTotal / item.count : 0,
-      reservedRatio: item.stock > 0 ? (item.reserved / item.stock) * 100 : 0,
-    }));
-  }, [filteredRows]);
-
-  const zoneUtilBarData = useMemo(() => ({
-    labels: zoneUtilSummary.map((item) => item.zone),
-    datasets: [
-      {
-        label: "평균 공간 점유율(%)",
-        data: zoneUtilSummary.map((item) => Number(item.avgUtil.toFixed(1))),
-        backgroundColor: "#6ab3ff",
-        borderRadius: 6,
-        yAxisID: "y",
-      },
-      {
-        label: "즉시출고 가능 수량",
-        data: zoneUtilSummary.map((item) => item.available),
-        backgroundColor: "#27a36a",
-        borderRadius: 6,
-        yAxisID: "y1",
-      },
-    ],
-  }), [zoneUtilSummary]);
-
-  const areaStackData = useMemo(() => ({
-    labels: areaSummary.map((item) => item.areaCode),
-    datasets: [
-      {
-        label: "즉시출고 가능",
-        data: areaSummary.map((item) => item.available),
-        backgroundColor: "#3f94ff",
-        borderRadius: 6,
-        borderSkipped: false,
-      },
-      {
-        label: "보류",
-        data: areaSummary.map((item) => item.reserved),
-        backgroundColor: "#f3a44d",
-        borderRadius: 6,
-        borderSkipped: false,
-      },
-    ],
-  }), [areaSummary]);
-
-  const ownerRadarData = useMemo(() => ({
-    labels: ownerSummary.map((item) => item.owner),
-    datasets: [
-      {
-        label: "평균 공간 점유율(%)",
-        data: ownerSummary.map((item) => Number(item.avgUtil.toFixed(1))),
-        borderColor: CHART_COLORS.blue,
-        backgroundColor: "rgba(36, 134, 249, 0.16)",
-        pointBackgroundColor: CHART_COLORS.blue,
-      },
-      {
-        label: "보류 비율(%)",
-        data: ownerSummary.map((item) => Number(item.reservedRatio.toFixed(1))),
-        borderColor: CHART_COLORS.amber,
-        backgroundColor: "rgba(242, 163, 65, 0.14)",
-        pointBackgroundColor: CHART_COLORS.amber,
-      },
-    ],
-  }), [ownerSummary]);
+  const listRows = useMemo(
+    () => [...filteredRows].sort((a, b) => String(a.locationCode).localeCompare(String(b.locationCode))),
+    [filteredRows],
+  );
 
   const visualRows = useMemo(() => {
     const sorted = [...filteredRows];
@@ -2284,211 +2055,93 @@ function LocationStockPage() {
       if (!groups[row.center]) groups[row.center] = [];
       groups[row.center].push(row);
     });
-    return groups;
+    return Object.entries(groups);
   }, [visualRows]);
 
-  const centerStackOptions = useMemo(() => {
-    const options = chartBaseOptions();
-    return {
-      ...options,
-      plugins: {
-        ...options.plugins,
-        legend: {
-          ...options.plugins.legend,
-          position: "bottom",
-        },
-      },
-      scales: {
-        x: {
-          ...options.scales.x,
-          stacked: true,
-        },
-        y: {
-          ...options.scales.y,
-          stacked: true,
-          beginAtZero: true,
-          ticks: { ...options.scales.y.ticks, precision: 0 },
-        },
-      },
-    };
-  }, []);
+  useEffect(() => {
+    const visibleIds = new Set(filteredRows.map((row) => row.id));
 
-  const utilDistributionOptions = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: "56%",
-    plugins: {
-      legend: {
-        position: "bottom",
-        labels: {
-          color: CHART_COLORS.text,
-          boxWidth: 10,
-          boxHeight: 10,
-          font: { family: "Noto Sans KR", size: 11 },
-        },
-      },
-      tooltip: {
-        backgroundColor: "#1f2c3f",
-        bodyFont: { family: "Noto Sans KR", size: 11 },
-        callbacks: {
-          label: (context) => `${context.label}: ${formatNumber(context.raw)}개 위치`,
-        },
-      },
-    },
-  }), []);
+    setSelectedRowIds((prev) => {
+      let changed = false;
+      const next = new Set();
+      prev.forEach((id) => {
+        if (visibleIds.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
 
-  const hotspotLineOptions = useMemo(() => {
-    const options = chartBaseOptions();
-    return {
-      ...options,
-      plugins: {
-        ...options.plugins,
-        legend: { ...options.plugins.legend, position: "bottom" },
-      },
-      scales: {
-        x: {
-          ...options.scales.x,
-          ticks: {
-            ...options.scales.x.ticks,
-            maxRotation: 0,
-            autoSkip: false,
-          },
-        },
-        y: {
-          ...options.scales.y,
-          beginAtZero: true,
-        },
-      },
-    };
-  }, []);
+    setExpandedRowIds((prev) => {
+      let changed = false;
+      const next = new Set();
+      prev.forEach((id) => {
+        if (visibleIds.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
 
-  const zoneUtilBarOptions = useMemo(() => {
-    const options = chartBaseOptions();
-    return {
-      ...options,
-      scales: {
-        ...options.scales,
-        y: {
-          ...options.scales.y,
-          beginAtZero: true,
-          title: { display: true, text: "공간 점유율(%)", color: CHART_COLORS.text, font: { family: "Noto Sans KR", size: 11 } },
-        },
-        y1: {
-          beginAtZero: true,
-          position: "right",
-          grid: { drawOnChartArea: false, color: "#f2f5fa" },
-          ticks: { color: CHART_COLORS.text, font: { family: "Noto Sans KR", size: 11 } },
-          border: { color: CHART_COLORS.line },
-          title: { display: true, text: "즉시출고 가능 수량", color: CHART_COLORS.text, font: { family: "Noto Sans KR", size: 11 } },
-        },
-      },
-    };
-  }, []);
-
-  const areaStackOptions = useMemo(() => {
-    const options = chartBaseOptions();
-    return {
-      ...options,
-      scales: {
-        x: {
-          ...options.scales.x,
-          stacked: true,
-          ticks: { ...options.scales.x.ticks, autoSkip: false },
-        },
-        y: {
-          ...options.scales.y,
-          stacked: true,
-          beginAtZero: true,
-          ticks: { ...options.scales.y.ticks, precision: 0 },
-        },
-      },
-    };
-  }, []);
-
-  const ownerRadarOptions = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: "bottom",
-        labels: {
-          color: CHART_COLORS.text,
-          boxWidth: 10,
-          boxHeight: 10,
-          font: { family: "Noto Sans KR", size: 11 },
-        },
-      },
-    },
-    scales: {
-      r: {
-        beginAtZero: true,
-        suggestedMax: 100,
-        grid: { color: "#edf2f8" },
-        angleLines: { color: "#edf2f8" },
-        pointLabels: {
-          color: CHART_COLORS.text,
-          font: { family: "Noto Sans KR", size: 11 },
-        },
-        ticks: {
-          color: CHART_COLORS.text,
-          backdropColor: "transparent",
-          stepSize: 20,
-          font: { family: "Noto Sans KR", size: 10 },
-        },
-      },
-    },
-  }), []);
-
-  const focusLocation = filteredRows.find((row) => row.id === focusLocationId) || null;
-  const scannedLocation = sourceRows.find((row) => row.id === scannedLocationId) || null;
-  const scannedActualQty = useMemo(() => {
-    if (!scannedLocation) return 0;
-    const seed = scannedLocation.locationCode
-      .split("")
-      .reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    const diff = (seed % 7) - 3;
-    return Math.max(scannedLocation.stock + diff, 0);
-  }, [scannedLocation]);
-  const scannedDiffQty = scannedLocation ? scannedActualQty - scannedLocation.stock : 0;
-
-  const findLocationByScan = (value) => {
-    const normalized = normalizeLookupValue(value).toUpperCase();
-    if (!normalized) return null;
-    return sourceRows.find((row) => {
-      const code = String(row.locationCode).toUpperCase();
-      return code === normalized || code.includes(normalized);
-    }) || null;
-  };
-
-  const handleLocationScan = () => {
-    const matched = findLocationByScan(scanLocationCode);
-    if (!matched) {
-      showToast("스캔한 로케이션을 찾지 못했습니다.");
+    if (!filteredRows.length) {
+      setFocusLocationId("");
       return;
     }
-    setScannedLocationId(matched.id);
-    setFocusLocationId(matched.id);
-    setFilters((prev) => ({
-      ...prev,
-      owner: prev.owner,
-      center: "ALL",
-      zone: "ALL",
-      area: "ALL",
-      query: matched.locationCode,
-    }));
-    setViewMode("dashboard");
-    showToast(`로케이션 스캔 완료: ${matched.locationCode}`);
+
+    if (!focusLocationId || !filteredRows.some((row) => row.id === focusLocationId)) {
+      setFocusLocationId(filteredRows[0].id);
+    }
+  }, [filteredRows, focusLocationId]);
+
+  const focusLocation = filteredRows.find((row) => row.id === focusLocationId) || null;
+
+  const selectedRows = useMemo(
+    () => filteredRows.filter((row) => selectedRowIds.has(row.id)),
+    [filteredRows, selectedRowIds],
+  );
+
+  const summarizeRows = (rows) => {
+    const totalStock = rows.reduce((sum, row) => sum + row.stock, 0);
+    const totalAvailable = rows.reduce((sum, row) => sum + row.available, 0);
+    const totalReserved = rows.reduce((sum, row) => sum + row.reserved, 0);
+    const locationCount = rows.length;
+    const avgUtil = locationCount ? rows.reduce((sum, row) => sum + row.util, 0) / locationCount : 0;
+    const reservedRatio = totalStock > 0 ? (totalReserved / totalStock) * 100 : 0;
+    return { totalStock, totalAvailable, totalReserved, locationCount, avgUtil, reservedRatio };
+  };
+
+  const selectionSummary = summarizeRows(selectedRows.length ? selectedRows : filteredRows);
+  const visualSummary = summarizeRows(filteredRows);
+
+  const isAllSelected = filteredRows.length > 0 && filteredRows.every((row) => selectedRowIds.has(row.id));
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    selectAllRef.current.indeterminate = selectedRowIds.size > 0 && !isAllSelected;
+  }, [selectedRowIds, isAllSelected]);
+
+  const toggleRowSelection = (rowId) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  };
+
+  const toggleExpand = (rowId) => {
+    setExpandedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
   };
 
   const resetFilters = () => {
     setFilters({
       owner: "ALL",
-      center: "ALL",
       zone: "ALL",
       area: "ALL",
-      query: "",
-      minStock: "",
-      maxStock: "",
+      location: "",
       minAvailable: "",
       maxAvailable: "",
       minReserved: "",
@@ -2498,8 +2151,8 @@ function LocationStockPage() {
     });
     setViewMode("list");
     setSortType("기본");
-    setScanLocationCode("");
-    setScannedLocationId("");
+    setSelectedRowIds(new Set());
+    setExpandedRowIds(new Set());
     showToast("필터를 초기화했습니다.");
   };
 
@@ -2507,177 +2160,97 @@ function LocationStockPage() {
     <SidebarLayout title="위치별 재고 현황">
       <div className="nw-page-head">
         <div>
-          <h2>위치별 재고</h2>
-          <p>리스트 뷰와 대시보드 뷰를 전환하고, 로케이션 스캔으로 즉시 대조합니다.</p>
+          <h2>위치별 재고 현황</h2>
+          <p>필터 조건으로 위치별 재고를 조회하고 리스트/시각화 화면을 전환해서 확인합니다.</p>
         </div>
       </div>
 
       <section className="nw-panel">
-        <div className="nw-inline-filter">
+        <div className="nw-inline-filter location-stock">
           <select value={filters.owner} onChange={(event) => setFilters((prev) => ({ ...prev, owner: event.target.value }))}>
-            {OWNER_OPTIONS.map((option) => <option key={option}>{option}</option>)}
+            {ownerOptions.map((option) => <option key={option}>{option}</option>)}
+          </select>
+          <select value={filters.zone} onChange={(event) => setFilters((prev) => ({ ...prev, zone: event.target.value }))}>
+            {zoneOptions.map((option) => <option key={option}>{option}</option>)}
+          </select>
+          <select value={filters.area} onChange={(event) => setFilters((prev) => ({ ...prev, area: event.target.value }))}>
+            {areaOptions.map((option) => <option key={option}>{option}</option>)}
           </select>
           <input
             type="text"
-            value={filters.query}
-            onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))}
-            placeholder="로케이션 코드 또는 구역 검색"
+            value={filters.location}
+            onChange={(event) => setFilters((prev) => ({ ...prev, location: event.target.value }))}
+            placeholder="위치를 검색하세요."
           />
-          <button type="button" className="nw-btn primary" onClick={() => showToast(`조회 결과 ${formatNumber(filteredRows.length)}건`)}>검색</button>
-          <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")}>☷</button>
-          <button type="button" className={`nw-icon-btn ${viewMode === "dashboard" ? "active" : ""}`} onClick={() => setViewMode("dashboard")} title="대시보드 보기">◫</button>
-          <input
-            type="text"
-            value={scanLocationCode}
-            onChange={(event) => setScanLocationCode(event.target.value)}
-            placeholder="로케이션 바코드 스캔"
-          />
-          <button type="button" className="nw-btn primary" onClick={handleLocationScan}>스캔 조회</button>
+          <button type="button" className="nw-btn primary" onClick={() => showToast(`조회 결과 ${formatNumber(filteredRows.length)}건`)}>
+            검색
+          </button>
+          <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="리스트 보기">
+            ≡
+          </button>
+          <button type="button" className={`nw-icon-btn ${viewMode === "visual" ? "active" : ""}`} onClick={() => setViewMode("visual")} title="시각화 보기">
+            ⊞
+          </button>
         </div>
 
-        <div className="nw-filter-grid location">
+        <div className="nw-filter-grid location-stock">
           <label>
-            물류센터
-            <select value={filters.center} onChange={(event) => setFilters((prev) => ({ ...prev, center: event.target.value }))}>
-              {CENTER_OPTIONS.map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </label>
-          <label>
-            작업 존
-            <select value={filters.zone} onChange={(event) => setFilters((prev) => ({ ...prev, zone: event.target.value }))}>
-              {ZONE_OPTIONS.map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </label>
-          <label>
-            랙 구역
-            <select value={filters.area} onChange={(event) => setFilters((prev) => ({ ...prev, area: event.target.value }))}>
-              {areaOptions.map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </label>
-          <label>
-            보관 수량(최소)
-            <input type="number" value={filters.minStock} onChange={(event) => setFilters((prev) => ({ ...prev, minStock: event.target.value }))} />
-          </label>
-          <label>
-            보관 수량(최대)
-            <input type="number" value={filters.maxStock} onChange={(event) => setFilters((prev) => ({ ...prev, maxStock: event.target.value }))} />
-          </label>
-          <label>
-            즉시출고 가능 수량(최소)
+            가용 재고 수량(최소)
             <input type="number" value={filters.minAvailable} onChange={(event) => setFilters((prev) => ({ ...prev, minAvailable: event.target.value }))} />
           </label>
           <label>
-            즉시출고 가능 수량(최대)
+            가용 재고 수량(최대)
             <input type="number" value={filters.maxAvailable} onChange={(event) => setFilters((prev) => ({ ...prev, maxAvailable: event.target.value }))} />
           </label>
           <label>
-            보류 수량(최소)
+            예약 재고 수량(최소)
             <input type="number" value={filters.minReserved} onChange={(event) => setFilters((prev) => ({ ...prev, minReserved: event.target.value }))} />
           </label>
           <label>
-            보류 수량(최대)
+            예약 재고 수량(최대)
             <input type="number" value={filters.maxReserved} onChange={(event) => setFilters((prev) => ({ ...prev, maxReserved: event.target.value }))} />
           </label>
           <label>
-            공간 점유율(최소 %)
+            적재 비율(최소 %)
             <input type="number" value={filters.minUtil} onChange={(event) => setFilters((prev) => ({ ...prev, minUtil: event.target.value }))} />
           </label>
           <label>
-            공간 점유율(최대 %)
+            적재 비율(최대 %)
             <input type="number" value={filters.maxUtil} onChange={(event) => setFilters((prev) => ({ ...prev, maxUtil: event.target.value }))} />
           </label>
         </div>
 
         <div className="nw-panel-actions">
-          <button type="button" className="nw-btn" onClick={() => showToast("엑셀 다운로드를 시작합니다 (데모)")}>엑셀 다운로드</button>
           <button type="button" className="nw-btn" onClick={resetFilters}>초기화</button>
+          <button type="button" className="nw-btn" onClick={() => showToast("엑셀 다운로드를 시작합니다 (데모)")}>엑셀 다운로드</button>
         </div>
       </section>
 
-      {scannedLocation ? (
-        <section className="nw-panel nw-location-scan-result">
-          <div className="nw-panel-title-row">
-            <h3>로케이션 스캔 대조 결과</h3>
-            <div className="nw-helper-text">{scannedLocation.locationCode} / {scannedLocation.center} / {scannedLocation.zone}</div>
-          </div>
-          <div className="nw-location-scan-kpi">
-            <article>
-              <span>전산 재고</span>
-              <strong>{formatNumber(scannedLocation.stock)}</strong>
-            </article>
-            <article>
-              <span>실재고(실사)</span>
-              <strong>{formatNumber(scannedActualQty)}</strong>
-            </article>
-            <article className={scannedDiffQty > 0 ? "text-plus" : scannedDiffQty < 0 ? "text-minus" : ""}>
-              <span>차이 수량</span>
-              <strong>{scannedDiffQty > 0 ? `+${formatNumber(scannedDiffQty)}` : formatNumber(scannedDiffQty)}</strong>
-            </article>
-          </div>
-          <div className="nw-helper-text">웹 바코드 입력/스캐너 연동으로 해당 위치의 전산 재고와 실사 재고를 즉시 대조하는 데모입니다.</div>
-        </section>
-      ) : null}
-
-      {viewMode === "dashboard" ? (
+      {viewMode === "visual" ? (
         <>
-          <section className="nw-summary-grid location-kpi">
+          <section className="nw-summary-grid location-visual-kpi">
             <article className="nw-summary-card">
-              <div className="label">합계 재고</div>
-              <strong>{formatNumber(summary.total)}</strong>
+              <div className="label">총 재고</div>
+              <strong>{formatNumber(visualSummary.totalStock)}</strong>
               <span>전체 조건 기준</span>
             </article>
-            <article className="nw-summary-card">
-              <div className="label">즉시출고 가능</div>
-              <strong>{formatNumber(summary.available)}</strong>
-              <span>가용 재고 합산</span>
-            </article>
             <article className="nw-summary-card warn">
-              <div className="label">보류 수량</div>
-              <strong>{formatNumber(summary.reserved)}</strong>
-              <span>합계 대비 비중 {summary.total ? `${Math.round((summary.reserved / summary.total) * 100)}%` : "0%"}</span>
+              <div className="label">예약 재고</div>
+              <strong>{formatNumber(visualSummary.totalReserved)}</strong>
+              <span>합계 대비 {visualSummary.reservedRatio.toFixed(1)}%</span>
             </article>
             <article className="nw-summary-card">
-              <div className="label">위치 수 / 평균 공간 점유율</div>
-              <strong>{formatNumber(summary.locationCount)} / {summary.avgUtil.toFixed(1)}%</strong>
-              <span>필터 결과 기준</span>
+              <div className="label">위치 수</div>
+              <strong>{formatNumber(visualSummary.locationCount)}</strong>
+              <span>평균 적재 비율 {visualSummary.avgUtil.toFixed(1)}%</span>
             </article>
-          </section>
-
-          <section className="nw-chart-grid location">
-            <ChartPanel title="센터별 즉시출고/보류 스택" helper="전체 조건 기준">
-              <Bar data={centerStackData} options={centerStackOptions} />
-            </ChartPanel>
-
-            <ChartPanel title="공간 점유율 분포" helper="점유율 구간별 위치 수">
-              <Doughnut data={utilDistributionData} options={utilDistributionOptions} />
-            </ChartPanel>
-
-            <ChartPanel title="핫스팟 TOP 5 추이" helper="공간 점유율(%) + 보류 수량">
-              {hotSpots.length ? <Line data={hotspotLineData} options={hotspotLineOptions} /> : <div className="nw-empty inline">표시할 위치가 없습니다.</div>}
-            </ChartPanel>
-
-            <ChartPanel title="존별 공간 점유율 & 가용 재고" helper="작업 존 단위 비교">
-              {zoneUtilSummary.length ? <Bar data={zoneUtilBarData} options={zoneUtilBarOptions} /> : <div className="nw-empty inline">표시할 존 데이터가 없습니다.</div>}
-            </ChartPanel>
-
-            <ChartPanel title="랙 구역별 즉시출고/보류" helper="상위 8개 구역">
-              {areaSummary.length ? <Bar data={areaStackData} options={areaStackOptions} /> : <div className="nw-empty inline">표시할 구역 데이터가 없습니다.</div>}
-            </ChartPanel>
-
-            <ChartPanel title="화주사별 점유/보류 레이더" helper="평균 공간 점유율 vs 보류 비율">
-              {ownerSummary.length ? <Radar data={ownerRadarData} options={ownerRadarOptions} /> : <div className="nw-empty inline">표시할 화주사 데이터가 없습니다.</div>}
-            </ChartPanel>
           </section>
 
           <section className="nw-panel">
             <div className="nw-panel-title-row">
-              <h3>2D 위치 대시보드</h3>
+              <h3>위치 시각화</h3>
               <div className="nw-sort-row">
-                {[
-                  "기본",
-                  "수량 높은순",
-                  "수량 낮은순",
-                ].map((label) => (
+                {["기본", "수량 높은순", "수량 낮은순"].map((label) => (
                   <button
                     key={label}
                     type="button"
@@ -2689,110 +2262,61 @@ function LocationStockPage() {
                 ))}
               </div>
             </div>
-            {Object.entries(groupedVisualRows).map(([center, rows]) => {
-              const total = rows.reduce((sum, row) => sum + row.stock, 0);
-              const reserved = rows.reduce((sum, row) => sum + row.reserved, 0);
-              const centerBubbleData = {
-                datasets: [
-                  {
-                    label: `${center} 위치`,
-                    data: rows.map((row, index) => ({
-                      x: (index % 6) + 1,
-                      y: Math.floor(index / 6) + 1,
-                      r: Math.max(6, Math.min(24, 6 + row.stock * 0.18)),
-                      locationCode: row.locationCode,
-                      areaCode: row.areaCode,
-                      stock: row.stock,
-                      available: row.available,
-                      reserved: row.reserved,
-                      util: row.util,
-                    })),
-                    backgroundColor: rows.map((row) => intensityColor(getLocationIntensity(row.stock, row.capacity))),
-                    borderColor: rows.map((row) => (row.reserved > 0 ? CHART_COLORS.amber : "#ffffff")),
-                    borderWidth: rows.map((row) => (row.reserved > 0 ? 2 : 1)),
-                  },
-                ],
-              };
-              const centerBubbleOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { display: false },
-                  tooltip: {
-                    backgroundColor: "#1f2c3f",
-                    bodyFont: { family: "Noto Sans KR", size: 11 },
-                    callbacks: {
-                      label: (context) => {
-                        const row = context.raw;
-                        return `${row.locationCode} (${row.areaCode}) | 보관 ${formatNumber(row.stock)} | 즉시출고 ${formatNumber(row.available)} | 보류 ${formatNumber(row.reserved)} | 점유율 ${row.util.toFixed(1)}%`;
-                      },
-                    },
-                  },
-                },
-                scales: {
-                  x: {
-                    min: 0.5,
-                    max: 6.6,
-                    ticks: { display: false },
-                    grid: { color: "#edf2f9" },
-                    border: { color: CHART_COLORS.line },
-                  },
-                  y: {
-                    min: 0.5,
-                    max: Math.max(Math.ceil(rows.length / 6), 1) + 0.6,
-                    reverse: true,
-                    ticks: { display: false },
-                    grid: { color: "#edf2f9" },
-                    border: { color: CHART_COLORS.line },
-                  },
-                },
-              };
 
+            {groupedVisualRows.length ? groupedVisualRows.map(([center, rows]) => {
+              const totalStock = rows.reduce((sum, row) => sum + row.stock, 0);
+              const totalReserved = rows.reduce((sum, row) => sum + row.reserved, 0);
               return (
-                <div key={center} className="nw-center-block chart-mode">
+                <div key={center} className="nw-center-block location-visual">
                   <div className="nw-center-head">
                     <strong>{center}</strong>
-                    <span>보관: {formatNumber(total)} / 보류: {formatNumber(reserved)}</span>
+                    <span>재고: {formatNumber(totalStock)} / 예약: {formatNumber(totalReserved)}</span>
                     <em>{formatNumber(rows.length)}개 위치</em>
                   </div>
-                  <div className="nw-center-visual-layout">
-                    <div className="nw-center-map">
-                      <Bubble data={centerBubbleData} options={centerBubbleOptions} />
-                    </div>
-                    <div className="nw-center-hot-list">
-                      {rows.slice(0, 8).map((row) => {
-                        const util = row.util;
-                        return (
-                          <button
-                            key={row.id}
-                            type="button"
-                            className={`nw-compact-cell ${focusLocationId === row.id ? "active" : ""}`}
-                            onClick={() => setFocusLocationId(row.id)}
-                          >
-                            <div className="title">{row.locationCode}</div>
-                            <div className="meta">{row.zone} · {row.areaCode}</div>
-                            <div className="qty">{formatNumber(row.stock)} / 보류 {formatNumber(row.reserved)}</div>
-                            <div className="mini"><i style={{ width: `${Math.max(util, 4)}%` }} /></div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="nw-location-card-grid">
+                    {rows.map((row) => {
+                      const intensity = getLocationIntensity(row.stock, row.capacity);
+                      return (
+                        <button
+                          key={row.id}
+                          type="button"
+                          className={`nw-location-card-v2 ${intensity} ${row.reserved > 0 ? "has-reserved" : ""} ${focusLocationId === row.id ? "active" : ""}`}
+                          onClick={() => setFocusLocationId(row.id)}
+                        >
+                          <span className="nw-location-card-status">{row.stock > 0 ? "재고있음" : "재고없음"}</span>
+                          <div className="nw-location-card-numbers">
+                            <article>
+                              <span>재고</span>
+                              <strong>{formatNumber(row.stock)}</strong>
+                            </article>
+                            <article className="reserved">
+                              <span>예약</span>
+                              <strong>{formatNumber(row.reserved)}</strong>
+                            </article>
+                          </div>
+                          <div className="nw-location-card-foot">
+                            <strong>{row.locationCode}</strong>
+                            <span>{row.zone} · 적재 비율 {row.util.toFixed(1)}%</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
-            })}
+            }) : <div className="nw-empty">조회 조건에 해당하는 위치가 없습니다.</div>}
 
             {focusLocation ? (
               <section className="nw-focus-panel">
                 <h4>위치 상세 - {focusLocation.locationCode}</h4>
-                <p>{focusLocation.center} / {focusLocation.zone} / {focusLocation.areaCode} / 공간 점유율 {focusLocation.util.toFixed(1)}%</p>
+                <p>{focusLocation.center} / {focusLocation.zone} / {focusLocation.areaCode} / 적재 비율 {focusLocation.util.toFixed(1)}%</p>
                 {focusLocation.products.length ? (
                   <ul>
                     {focusLocation.products.map((product) => (
                       <li key={product.id}>
                         <strong>{product.name}</strong>
                         <span>{product.option}</span>
-                        <span>보관 {formatNumber(product.stock)} / 보류 {formatNumber(product.reserved)}</span>
+                        <span>재고 {formatNumber(product.stock)} / 예약 {formatNumber(product.reserved)}</span>
                       </li>
                     ))}
                   </ul>
@@ -2804,94 +2328,175 @@ function LocationStockPage() {
           </section>
         </>
       ) : (
-        <section className="nw-panel">
-          <div className="nw-panel-title-row">
-            <h3>위치별 리스트</h3>
-            <div className="nw-helper-text">행을 클릭하면 하단 상세가 갱신됩니다.</div>
-          </div>
+        <>
+          <section className="nw-summary-grid location-selection-kpi">
+            <article className="nw-summary-card selection-target">
+              <div className="label">합계 재고</div>
+              <strong>{formatNumber(selectionSummary.totalStock)}</strong>
+              <span>{selectedRows.length ? `선택 위치 ${formatNumber(selectedRows.length)}건 기준` : `전체 위치 ${formatNumber(filteredRows.length)}건 기준`}</span>
+            </article>
+            <article className="nw-summary-card">
+              <div className="label">평균 적재 비율</div>
+              <strong>{selectionSummary.avgUtil.toFixed(1)}%</strong>
+              <span>선택 리스트 평균</span>
+            </article>
+            <article className="nw-summary-card">
+              <div className="label">위치 수</div>
+              <strong>{formatNumber(selectionSummary.locationCount)}</strong>
+              <span>대시보드 기준 위치</span>
+            </article>
+            <article className="nw-summary-card warn">
+              <div className="label">가용 / 예약 재고</div>
+              <strong>{formatNumber(selectionSummary.totalAvailable)} / {formatNumber(selectionSummary.totalReserved)}</strong>
+              <span>예약 비중 {selectionSummary.reservedRatio.toFixed(1)}%</span>
+            </article>
+          </section>
 
-          <div className="nw-table-wrap">
-            <table className="nw-table">
-              <thead>
-                <tr>
-                  <th>센터</th>
-                  <th>작업 존</th>
-                  <th>랙 구역</th>
-                  <th>로케이션</th>
-                  <th>등록 상품</th>
-                  <th>보관 수량</th>
-                  <th>즉시출고 가능</th>
-                  <th>보류 수량</th>
-                  <th>공간 점유율</th>
-                  <th>상품 종수</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((row) => {
-                  const util = row.util;
-                  return (
-                    <tr key={row.id} className={`${focusLocationId === row.id ? "selected-row" : ""} nw-click-row`} onClick={() => setFocusLocationId(row.id)}>
-                      <td>{row.center}</td>
-                      <td><span className="nw-zone-chip">{row.zone}</span></td>
-                      <td>{row.areaCode}</td>
-                      <td>{row.locationCode}</td>
-                      <td className="nw-location-product-cell">
-                        {row.products.length ? (
-                          <div className="nw-location-product-list">
-                            {row.products.slice(0, 3).map((product) => (
-                              <div key={product.id} className="item">
-                                <strong>{product.name}</strong>
-                                <span>{product.option}</span>
-                                <em>{formatNumber(product.stock)}개</em>
+          <section className="nw-panel">
+            <div className="nw-panel-title-row">
+              <h3>위치별 리스트</h3>
+              <div className="nw-helper-text">체크박스로 선택하면 상단 대시보드가 선택 기준으로 갱신됩니다.</div>
+            </div>
+
+            <div className="nw-table-wrap">
+              <table className="nw-table nw-location-list-table">
+                <thead>
+                  <tr>
+                    <th className="check">
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={isAllSelected}
+                        onChange={(event) => {
+                          if (event.target.checked) {
+                            setSelectedRowIds(new Set(filteredRows.map((row) => row.id)));
+                          } else {
+                            setSelectedRowIds(new Set());
+                          }
+                        }}
+                      />
+                    </th>
+                    <th className="expand" />
+                    <th>센터</th>
+                    <th>존</th>
+                    <th>구역</th>
+                    <th>위치</th>
+                    <th>합계 재고</th>
+                    <th>가용 재고</th>
+                    <th>예약 재고</th>
+                    <th>적재 비율</th>
+                    <th>상품 종수</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {listRows.flatMap((row) => {
+                    const isSelected = selectedRowIds.has(row.id);
+                    const isExpanded = expandedRowIds.has(row.id);
+                    const intensity = getLocationIntensity(row.stock, row.capacity);
+                    const rows = [
+                      <tr
+                        key={`${row.id}-main`}
+                        className={`${focusLocationId === row.id ? "selected-row" : ""} ${isSelected ? "checked-row" : ""} nw-click-row`}
+                        onClick={() => setFocusLocationId(row.id)}
+                      >
+                        <td className="check" onClick={(event) => event.stopPropagation()}>
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleRowSelection(row.id)} />
+                        </td>
+                        <td className="expand" onClick={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            className={`nw-row-expand-btn ${isExpanded ? "open" : ""}`}
+                            onClick={() => toggleExpand(row.id)}
+                          >
+                            ▸
+                          </button>
+                        </td>
+                        <td>{row.center}</td>
+                        <td><span className="nw-zone-chip">{row.zone}</span></td>
+                        <td>{row.areaCode}</td>
+                        <td>{row.locationCode}</td>
+                        <td>{formatNumber(row.stock)}</td>
+                        <td>{formatNumber(row.available)}</td>
+                        <td>{formatNumber(row.reserved)}</td>
+                        <td><span className={`nw-util-pill ${intensity}`}>{row.util.toFixed(1)}%</span></td>
+                        <td>{formatNumber(row.products.length)}</td>
+                      </tr>,
+                    ];
+
+                    if (isExpanded) {
+                      rows.push(
+                        <tr key={`${row.id}-expand`} className="nw-row-expand">
+                          <td colSpan={11}>
+                            {row.products.length ? (
+                              <div className="nw-row-expand-body">
+                                <table className="nw-mini-table">
+                                  <thead>
+                                    <tr>
+                                      <th>화주사</th>
+                                      <th>상품명/옵션</th>
+                                      <th>바코드</th>
+                                      <th>합계 재고</th>
+                                      <th>가용 재고</th>
+                                      <th>예약 재고</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {row.products.map((product) => (
+                                      <tr key={`${row.id}-${product.id}`}>
+                                        <td>{product.owner}</td>
+                                        <td>{product.name} / {product.option}</td>
+                                        <td>{product.barcode}</td>
+                                        <td>{formatNumber(product.stock)}</td>
+                                        <td>{formatNumber(product.available)}</td>
+                                        <td>{formatNumber(product.reserved)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
-                            ))}
-                            {row.products.length > 3 ? <div className="more">외 {formatNumber(row.products.length - 3)}개</div> : null}
-                          </div>
-                        ) : (
-                          <span className="nw-empty-inline">-</span>
-                        )}
-                      </td>
-                      <td>{formatNumber(row.stock)}</td>
-                      <td>{formatNumber(row.available)}</td>
-                      <td>{formatNumber(row.reserved)}</td>
-                      <td>{util.toFixed(1)}%</td>
-                      <td>{formatNumber(row.products.length)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                            ) : (
+                              <div className="nw-empty inline">등록된 상품이 없습니다.</div>
+                            )}
+                          </td>
+                        </tr>,
+                      );
+                    }
 
-          {!filteredRows.length ? <div className="nw-empty">조회 조건에 해당하는 위치가 없습니다.</div> : null}
+                    return rows;
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-          {focusLocation ? (
-            <section className="nw-focus-panel">
-              <h4>리스트 선택 상세 - {focusLocation.locationCode}</h4>
-              <p>{focusLocation.center} / {focusLocation.zone} / {focusLocation.areaCode} / 공간 점유율 {focusLocation.util.toFixed(1)}%</p>
-              {focusLocation.products.length ? (
-                <ul>
-                  {focusLocation.products.map((product) => (
-                    <li key={product.id}>
-                      <strong>{product.name}</strong>
-                      <span>{product.option}</span>
-                      <span>보관 {formatNumber(product.stock)} / 보류 {formatNumber(product.reserved)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="nw-empty inline">등록된 상품이 없습니다.</div>
-              )}
-            </section>
-          ) : null}
-        </section>
+            {!filteredRows.length ? <div className="nw-empty">조회 조건에 해당하는 위치가 없습니다.</div> : null}
+
+            {focusLocation ? (
+              <section className="nw-focus-panel">
+                <h4>리스트 선택 상세 - {focusLocation.locationCode}</h4>
+                <p>{focusLocation.center} / {focusLocation.zone} / {focusLocation.areaCode} / 적재 비율 {focusLocation.util.toFixed(1)}%</p>
+                {focusLocation.products.length ? (
+                  <ul>
+                    {focusLocation.products.map((product) => (
+                      <li key={product.id}>
+                        <strong>{product.name}</strong>
+                        <span>{product.option}</span>
+                        <span>재고 {formatNumber(product.stock)} / 가용 {formatNumber(product.available)} / 예약 {formatNumber(product.reserved)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="nw-empty inline">등록된 상품이 없습니다.</div>
+                )}
+              </section>
+            ) : null}
+          </section>
+        </>
       )}
 
       <GlobalToast message={toast} />
     </SidebarLayout>
   );
 }
-
 function InventoryLookupTab({ onMoveToInput }) {
   const [owner, setOwner] = useState("");
   const [query, setQuery] = useState("");
