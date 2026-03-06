@@ -2109,7 +2109,6 @@ function LocationStockPage() {
   };
 
   const selectionSummary = summarizeRows(selectedRows.length ? selectedRows : filteredRows);
-  const visualSummary = summarizeRows(filteredRows);
 
   const isAllSelected = filteredRows.length > 0 && filteredRows.every((row) => selectedRowIds.has(row.id));
 
@@ -2134,6 +2133,42 @@ function LocationStockPage() {
       else next.add(rowId);
       return next;
     });
+  };
+
+  const findLocationByScan = (value) => {
+    const normalized = normalizeLookupValue(value).toUpperCase();
+    if (!normalized) return null;
+    return sourceRows.find((row) => {
+      const code = String(row.locationCode).toUpperCase();
+      return code === normalized || code.includes(normalized);
+    }) || null;
+  };
+
+  const handleLocationScan = () => {
+    const matched = findLocationByScan(filters.location);
+    if (!matched) {
+      showToast("스캔한 위치를 찾지 못했습니다.");
+      return;
+    }
+
+    setFilters((prev) => ({
+      ...prev,
+      owner: "ALL",
+      zone: "ALL",
+      area: "ALL",
+      location: matched.locationCode,
+      minAvailable: "",
+      maxAvailable: "",
+      minReserved: "",
+      maxReserved: "",
+      minUtil: "",
+      maxUtil: "",
+    }));
+    setSelectedRowIds(new Set([matched.id]));
+    setExpandedRowIds(new Set([matched.id]));
+    setFocusLocationId(matched.id);
+    setViewMode("list");
+    showToast(`스캔 완료: ${matched.locationCode}`);
   };
 
   const resetFilters = () => {
@@ -2180,10 +2215,10 @@ function LocationStockPage() {
             type="text"
             value={filters.location}
             onChange={(event) => setFilters((prev) => ({ ...prev, location: event.target.value }))}
-            placeholder="위치를 검색하세요."
+            placeholder="위치를 스캔하세요."
           />
-          <button type="button" className="nw-btn primary" onClick={() => showToast(`조회 결과 ${formatNumber(filteredRows.length)}건`)}>
-            검색
+          <button type="button" className="nw-btn primary" onClick={handleLocationScan}>
+            스캔
           </button>
           <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="리스트 보기">
             ≡
@@ -2228,21 +2263,26 @@ function LocationStockPage() {
 
       {viewMode === "visual" ? (
         <>
-          <section className="nw-summary-grid location-visual-kpi">
-            <article className="nw-summary-card">
-              <div className="label">총 재고</div>
-              <strong>{formatNumber(visualSummary.totalStock)}</strong>
-              <span>전체 조건 기준</span>
+          <section className="nw-summary-grid location-selection-kpi">
+            <article className="nw-summary-card selection-target">
+              <div className="label">합계 재고</div>
+              <strong>{formatNumber(selectionSummary.totalStock)}</strong>
+              <span>{selectedRows.length ? `선택 위치 ${formatNumber(selectedRows.length)}건 기준` : `전체 위치 ${formatNumber(filteredRows.length)}건 기준`}</span>
             </article>
-            <article className="nw-summary-card warn">
-              <div className="label">예약 재고</div>
-              <strong>{formatNumber(visualSummary.totalReserved)}</strong>
-              <span>합계 대비 {visualSummary.reservedRatio.toFixed(1)}%</span>
+            <article className="nw-summary-card">
+              <div className="label">평균 적재 비율</div>
+              <strong>{selectionSummary.avgUtil.toFixed(1)}%</strong>
+              <span>선택 리스트 평균</span>
             </article>
             <article className="nw-summary-card">
               <div className="label">위치 수</div>
-              <strong>{formatNumber(visualSummary.locationCount)}</strong>
-              <span>평균 적재 비율 {visualSummary.avgUtil.toFixed(1)}%</span>
+              <strong>{formatNumber(selectionSummary.locationCount)}</strong>
+              <span>대시보드 기준 위치</span>
+            </article>
+            <article className="nw-summary-card warn">
+              <div className="label">가용 / 예약 재고</div>
+              <strong>{formatNumber(selectionSummary.totalAvailable)} / {formatNumber(selectionSummary.totalReserved)}</strong>
+              <span>예약 비중 {selectionSummary.reservedRatio.toFixed(1)}%</span>
             </article>
           </section>
 
