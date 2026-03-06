@@ -69,7 +69,29 @@ function useToast() {
 
 const OWNER_OPTIONS = ["ALL", "화주사 2", "안나엔모드", "onedns_test", "원차일드", "테스트"];
 const CENTER_OPTIONS = ["ALL", "A센터", "B센터"];
-const ZONE_OPTIONS = ["ALL", "입고존", "보관존", "출고존", "반품존", "뮬랑"];
+const SLOW_ZONE_OPTIONS = [
+  "입고존-A",
+  "입고존-B",
+  "입고존-C",
+  "입고존-D",
+  "보관존-A",
+  "보관존-B",
+  "보관존-C",
+  "보관존-D",
+  "보관존-E",
+  "보관존-F",
+  "보관존-G",
+  "보관존-H",
+  "출고존-A",
+  "출고존-B",
+  "출고존-C",
+  "출고존-D",
+  "반품존-A",
+  "반품존-B",
+  "뮬랑-A",
+  "뮬랑-B",
+];
+const ZONE_OPTIONS = ["ALL", ...SLOW_ZONE_OPTIONS];
 const SEASON_OPTIONS = ["ALL", "봄", "여름", "FW24", "FW25", "연중"];
 
 const CHART_COLORS = {
@@ -138,6 +160,15 @@ function chartBaseOptions() {
       },
     },
   };
+}
+
+function getZoneBase(zone = "") {
+  if (zone.startsWith("출고존")) return "출고존";
+  if (zone.startsWith("입고존")) return "입고존";
+  if (zone.startsWith("보관존")) return "보관존";
+  if (zone.startsWith("반품존")) return "반품존";
+  if (zone.startsWith("뮬랑")) return "뮬랑";
+  return "기타";
 }
 
 const PRODUCT_MASTER = [
@@ -467,7 +498,7 @@ function buildLocationRows() {
 
 const LOCATION_STOCK_ROWS = buildLocationRows();
 
-const SLOW_MOVING_SKUS = [
+const BASE_SLOW_MOVING_SKUS = [
   {
     id: "sku-001",
     center: "A센터",
@@ -480,8 +511,8 @@ const SLOW_MOVING_SKUS = [
     daysNoOutbound: 118,
     daysSinceInbound: 118,
     locations: [
-      { id: "sku-001-l1", zone: "보관존", area: "4E-AX", locationCode: "4E-AX-06-4", optionName: "아이보리,5호(XL)", barcode: "81231341295121", availableQty: 1, reservedQty: 0 },
-      { id: "sku-001-l2", zone: "보관존", area: "4E-AX", locationCode: "4E-AX-09-4", optionName: "아이보리,5호(XL)", barcode: "81231341295121", availableQty: 2, reservedQty: 0 },
+      { id: "sku-001-l1", zone: "보관존-A", area: "4E-AX", locationCode: "4E-AX-06-4", optionName: "아이보리,5호(XL)", barcode: "81231341295121", availableQty: 1, reservedQty: 0 },
+      { id: "sku-001-l2", zone: "보관존-B", area: "4E-AX", locationCode: "4E-AX-09-4", optionName: "아이보리,5호(XL)", barcode: "81231341295121", availableQty: 2, reservedQty: 0 },
     ],
   },
   {
@@ -496,9 +527,9 @@ const SLOW_MOVING_SKUS = [
     daysNoOutbound: 190,
     daysSinceInbound: 130,
     locations: [
-      { id: "sku-002-l1", zone: "보관존", area: "4E-AX", locationCode: "4E-AX-02-1", optionName: "아이보리,M", barcode: "81231341295122", availableQty: 1, reservedQty: 0 },
-      { id: "sku-002-l2", zone: "보관존", area: "4E-AX", locationCode: "4E-AX-03-1", optionName: "블루,S", barcode: "81231341295122", availableQty: 1, reservedQty: 0 },
-      { id: "sku-002-l3", zone: "보관존", area: "4E-AX", locationCode: "4E-AX-09-5", optionName: "아이보리,3호(M)", barcode: "81231341295122", availableQty: 3, reservedQty: 0 },
+      { id: "sku-002-l1", zone: "보관존-C", area: "4E-AX", locationCode: "4E-AX-02-1", optionName: "아이보리,M", barcode: "81231341295122", availableQty: 1, reservedQty: 0 },
+      { id: "sku-002-l2", zone: "보관존-D", area: "4E-AX", locationCode: "4E-AX-03-1", optionName: "블루,S", barcode: "81231341295122", availableQty: 1, reservedQty: 0 },
+      { id: "sku-002-l3", zone: "보관존-E", area: "4E-AX", locationCode: "4E-AX-09-5", optionName: "아이보리,3호(M)", barcode: "81231341295122", availableQty: 3, reservedQty: 0 },
     ],
   },
   {
@@ -513,8 +544,8 @@ const SLOW_MOVING_SKUS = [
     daysNoOutbound: 38,
     daysSinceInbound: 42,
     locations: [
-      { id: "sku-003-l1", zone: "보관존", area: "4E-A", locationCode: "4E-A-01-1", optionName: "블랙/화이트,270mm", barcode: "880123456789", availableQty: 145, reservedQty: 5 },
-      { id: "sku-003-l2", zone: "보관존", area: "3C-B", locationCode: "3C-B-02-5", optionName: "블랙/화이트,270mm", barcode: "880123456789", availableQty: 144, reservedQty: 6 },
+      { id: "sku-003-l1", zone: "보관존-F", area: "4E-A", locationCode: "4E-A-01-1", optionName: "블랙/화이트,270mm", barcode: "880123456789", availableQty: 145, reservedQty: 5 },
+      { id: "sku-003-l2", zone: "보관존-G", area: "3C-B", locationCode: "3C-B-02-5", optionName: "블랙/화이트,270mm", barcode: "880123456789", availableQty: 144, reservedQty: 6 },
     ],
   },
   {
@@ -529,9 +560,9 @@ const SLOW_MOVING_SKUS = [
     daysNoOutbound: 240,
     daysSinceInbound: 270,
     locations: [
-      { id: "sku-004-l1", zone: "보관존", area: "A-01", locationCode: "A-01-2", optionName: "블랙,M", barcode: "8001231230001", availableQty: 1, reservedQty: 1 },
-      { id: "sku-004-l2", zone: "보관존", area: "A-01", locationCode: "A-01-3", optionName: "블랙,M", barcode: "8001231230001", availableQty: 3, reservedQty: 0 },
-      { id: "sku-004-l3", zone: "보관존", area: "A-02", locationCode: "A-02-3", optionName: "블랙,M", barcode: "8001231230001", availableQty: 4, reservedQty: 0 },
+      { id: "sku-004-l1", zone: "보관존-H", area: "A-01", locationCode: "A-01-2", optionName: "블랙,M", barcode: "8001231230001", availableQty: 1, reservedQty: 1 },
+      { id: "sku-004-l2", zone: "입고존-A", area: "A-01", locationCode: "A-01-3", optionName: "블랙,M", barcode: "8001231230001", availableQty: 3, reservedQty: 0 },
+      { id: "sku-004-l3", zone: "출고존-A", area: "A-02", locationCode: "A-02-3", optionName: "블랙,M", barcode: "8001231230001", availableQty: 4, reservedQty: 0 },
     ],
   },
   {
@@ -546,11 +577,85 @@ const SLOW_MOVING_SKUS = [
     daysNoOutbound: 410,
     daysSinceInbound: 420,
     locations: [
-      { id: "sku-005-l1", zone: "보관존", area: "C-01", locationCode: "C-01-01", optionName: "오프화이트,L", barcode: "8899011122334", availableQty: 32, reservedQty: 2 },
-      { id: "sku-005-l2", zone: "보관존", area: "C-01", locationCode: "C-01-02", optionName: "오프화이트,L", barcode: "8899011122334", availableQty: 28, reservedQty: 1 },
+      { id: "sku-005-l1", zone: "반품존-A", area: "C-01", locationCode: "C-01-01", optionName: "오프화이트,L", barcode: "8899011122334", availableQty: 32, reservedQty: 2 },
+      { id: "sku-005-l2", zone: "뮬랑-A", area: "C-01", locationCode: "C-01-02", optionName: "오프화이트,L", barcode: "8899011122334", availableQty: 28, reservedQty: 1 },
     ],
   },
 ];
+
+function buildExtraSlowMovingSkus() {
+  const owners = ["onedns_test", "원차일드", "테스트", "화주사 2", "안나엔모드"];
+  const brands = ["MADE J", "VINTAGE LAB", "브랜드A", "브랜드B", "나이키코리아", "아디다스코리아"];
+  const seasons = ["SS25", "FW24", "FW25", "연중", "봄", "여름"];
+  const zonePairs = Array.from({ length: 20 }).map((_, index) => [
+    SLOW_ZONE_OPTIONS[index],
+    SLOW_ZONE_OPTIONS[(index + 7) % SLOW_ZONE_OPTIONS.length],
+  ]);
+
+  return Array.from({ length: 20 }).map((_, index) => {
+    const no = index + 6;
+    const owner = owners[index % owners.length];
+    const brand = brands[index % brands.length];
+    const season = seasons[index % seasons.length];
+    const center = index % 2 === 0 ? "A센터" : "B센터";
+    const daysNoOutbound = 72 + (index * 17);
+    const daysSinceInbound = daysNoOutbound + 12 + (index % 4) * 5;
+    const inboundMonth = ((index % 9) + 1).toString().padStart(2, "0");
+    const inboundDay = (((index * 3) % 27) + 1).toString().padStart(2, "0");
+    const lastInboundDate = `2025. ${inboundMonth}. ${inboundDay}.`;
+    const hasOutbound = index % 4 !== 0;
+    const lastOutboundDate = hasOutbound
+      ? `2025. ${String(((index + 2) % 12) + 1).padStart(2, "0")}. ${String((((index + 5) * 2) % 27) + 1).padStart(2, "0")}.`
+      : "없음";
+    const [zone1, zone2] = zonePairs[index % zonePairs.length];
+    const zone1Base = getZoneBase(zone1);
+    const zone2Base = getZoneBase(zone2);
+    const area1 = zone1Base === "출고존" ? "PK-01" : zone1Base === "입고존" ? "RCV-01" : zone1Base === "반품존" ? "RTN-01" : zone1Base === "뮬랑" ? "MLG-01" : `A-${String((index % 4) + 1).padStart(2, "0")}`;
+    const area2 = zone2Base === "출고존" ? "PK-02" : zone2Base === "입고존" ? "RCV-02" : zone2Base === "반품존" ? "RTN-02" : zone2Base === "뮬랑" ? "MLG-02" : `B-${String((index % 5) + 1).padStart(2, "0")}`;
+    const optionNo = ((index % 5) + 1).toString();
+    const qty1 = 6 + (index % 5) * 4;
+    const reserved1 = index % 3;
+    const qty2 = 10 + (index % 6) * 5;
+    const reserved2 = (index + 1) % 4;
+
+    return {
+      id: `sku-${String(no).padStart(3, "0")}`,
+      center,
+      owner,
+      productName: `확장 데모 부진재고 ${String(no).padStart(2, "0")}`,
+      brand,
+      season,
+      lastInboundDate,
+      lastOutboundDate,
+      daysNoOutbound,
+      daysSinceInbound,
+      locations: [
+        {
+          id: `sku-${String(no).padStart(3, "0")}-l1`,
+          zone: zone1,
+          area: area1,
+          locationCode: `${area1}-${String((index % 7) + 1).padStart(2, "0")}-${String((index % 3) + 1).padStart(2, "0")}`,
+          optionName: `옵션-${optionNo},M`,
+          barcode: `99012${String(100000 + no * 17 + index).padStart(6, "0")}`,
+          availableQty: qty1,
+          reservedQty: reserved1,
+        },
+        {
+          id: `sku-${String(no).padStart(3, "0")}-l2`,
+          zone: zone2,
+          area: area2,
+          locationCode: `${area2}-${String((index % 8) + 2).padStart(2, "0")}-${String((index % 4) + 1).padStart(2, "0")}`,
+          optionName: `옵션-${optionNo},L`,
+          barcode: `99012${String(200000 + no * 19 + index).padStart(6, "0")}`,
+          availableQty: qty2,
+          reservedQty: reserved2,
+        },
+      ],
+    };
+  });
+}
+
+const SLOW_MOVING_SKUS = [...BASE_SLOW_MOVING_SKUS, ...buildExtraSlowMovingSkus()];
 
 function buildSystemStockRows() {
   const rows = [];
@@ -954,7 +1059,8 @@ function SlowMovingBasePage({
       .map((row) => {
         const qty = row.availableQty + row.reservedQty;
         const ageWeight = Math.min(1, row.daysNoOutbound / 365);
-        const zoneWeight = zonePriority[row.zone] ?? 0.4;
+        const zoneBase = getZoneBase(row.zone);
+        const zoneWeight = zonePriority[zoneBase] ?? 0.4;
         const qtyWeight = maxQty > 0 ? qty / maxQty : 0;
         const availableShare = qty > 0 ? row.availableQty / qty : 0;
         const priorityScore = Math.round(((ageWeight * 0.42) + (zoneWeight * 0.28) + (qtyWeight * 0.2) + (availableShare * 0.1)) * 100);
@@ -968,18 +1074,17 @@ function SlowMovingBasePage({
           availableShare,
           priorityScore,
           actionLevel,
-          recommendation: zoneRecommendation[row.zone] || "보관 비용 관점에서 재배치 검토",
+          recommendation: zoneRecommendation[zoneBase] || "보관 비용 관점에서 재배치 검토",
         };
       })
       .sort((a, b) => b.priorityScore - a.priorityScore || b.qty - a.qty);
   }, [filteredRows]);
 
   const decisionSummary = useMemo(() => {
-    const primeZoneSet = new Set(["출고존", "입고존"]);
     const highRiskRows = riskRows.filter((row) => row.priorityScore >= 70);
     const moveRows = riskRows.filter((row) => row.priorityScore >= 60);
     const primeQty = riskRows
-      .filter((row) => primeZoneSet.has(row.zone))
+      .filter((row) => ["출고존", "입고존"].includes(getZoneBase(row.zone)))
       .reduce((sum, row) => sum + row.qty, 0);
     const highRiskQty = highRiskRows.reduce((sum, row) => sum + row.qty, 0);
     const avgRisk = riskRows.length
@@ -995,15 +1100,17 @@ function SlowMovingBasePage({
     };
   }, [riskRows]);
 
-  const topRiskRows = useMemo(() => riskRows.slice(0, 10), [riskRows]);
+  const topRiskRows = useMemo(() => riskRows.slice(0, 20), [riskRows]);
 
   const priorityActionRows = useMemo(
-    () => riskRows.filter((row) => row.priorityScore >= 55).slice(0, 8),
+    () => riskRows.filter((row) => row.priorityScore >= 55).slice(0, 20),
     [riskRows],
   );
 
+  const listDisplayRows = useMemo(() => filteredRows.slice(0, 20), [filteredRows]);
+
   const zoneDecisionSummary = useMemo(() => {
-    const order = ["출고존", "입고존", "보관존", "반품존", "뮬랑"];
+    const order = SLOW_ZONE_OPTIONS;
     const source = order.map((zone) => ({
       zone,
       totalQty: 0,
@@ -1011,6 +1118,8 @@ function SlowMovingBasePage({
       reservedQty: 0,
       priorityQty: 0,
       locationCount: 0,
+      moveLocationCount: 0,
+      urgentLocationCount: 0,
       riskTotal: 0,
       samples: [],
     }));
@@ -1024,7 +1133,10 @@ function SlowMovingBasePage({
       target.locationCount += 1;
       target.riskTotal += row.priorityScore;
       if (row.priorityScore >= 60) target.priorityQty += row.qty;
+      if (row.priorityScore >= 60) target.moveLocationCount += 1;
+      if (row.priorityScore >= 75) target.urgentLocationCount += 1;
       target.samples.push({
+        skuId: row.skuId,
         owner: row.owner,
         productName: row.productName,
         area: row.area,
@@ -1033,37 +1145,43 @@ function SlowMovingBasePage({
         availableQty: row.availableQty,
         reservedQty: row.reservedQty,
         qty: row.qty,
+        actionLevel: row.actionLevel,
+        recommendation: row.recommendation,
       });
     });
 
-    return source.map((item) => ({
-      ...item,
-      normalQty: Math.max(item.totalQty - item.priorityQty, 0),
-      avgRisk: item.locationCount ? item.riskTotal / item.locationCount : 0,
-      samples: item.samples
+    return source.map((item) => {
+      const sortedSamples = item.samples
         .sort((a, b) => b.priorityScore - a.priorityScore || b.qty - a.qty)
-        .slice(0, 2),
-    }));
-  }, [riskRows]);
+        .slice(0, 2);
+      const avgRisk = item.locationCount ? item.riskTotal / item.locationCount : 0;
+      const moveShare = item.locationCount ? (item.moveLocationCount / item.locationCount) * 100 : 0;
+      const urgencyTone = avgRisk >= 75 || item.urgentLocationCount >= 2
+        ? "critical"
+        : avgRisk >= 60 || item.moveLocationCount >= 2
+          ? "warning"
+          : item.locationCount > 0
+            ? "stable"
+            : "idle";
+      const headline = item.locationCount === 0
+        ? "대상 없음"
+        : item.urgentLocationCount > 0
+          ? `즉시 조치 ${item.urgentLocationCount}곳`
+          : item.moveLocationCount > 0
+            ? `우선 이동 ${item.moveLocationCount}곳`
+            : "모니터링 중심";
 
-  const agingQtyBuckets = useMemo(() => {
-    const source = [
-      { label: "0~89일", min: 0, max: 89, available: 0, reserved: 0, locations: 0 },
-      { label: "90~179일", min: 90, max: 179, available: 0, reserved: 0, locations: 0 },
-      { label: "180~364일", min: 180, max: 364, available: 0, reserved: 0, locations: 0 },
-      { label: "365일+", min: 365, max: Number.MAX_SAFE_INTEGER, available: 0, reserved: 0, locations: 0 },
-    ];
-
-    filteredRows.forEach((row) => {
-      const bucket = source.find((item) => row.daysNoOutbound >= item.min && row.daysNoOutbound <= item.max);
-      if (!bucket) return;
-      bucket.available += row.availableQty;
-      bucket.reserved += row.reservedQty;
-      bucket.locations += 1;
+      return {
+        ...item,
+        normalQty: Math.max(item.totalQty - item.priorityQty, 0),
+        avgRisk,
+        moveShare,
+        urgencyTone,
+        headline,
+        samples: sortedSamples,
+      };
     });
-
-    return source;
-  }, [filteredRows]);
+  }, [riskRows]);
 
   const topRiskBarData = useMemo(() => ({
     labels: topRiskRows.map((row) => row.locationCode),
@@ -1097,26 +1215,6 @@ function SlowMovingBasePage({
       },
     ],
   }), [zoneDecisionSummary]);
-
-  const agingQtyBarData = useMemo(() => ({
-    labels: agingQtyBuckets.map((item) => item.label),
-    datasets: [
-      {
-        label: "가용 재고",
-        data: agingQtyBuckets.map((item) => item.available),
-        backgroundColor: "#5da6ff",
-        borderRadius: 6,
-        stack: "qty",
-      },
-      {
-        label: "예약 재고",
-        data: agingQtyBuckets.map((item) => item.reserved),
-        backgroundColor: "#f2a341",
-        borderRadius: 6,
-        stack: "qty",
-      },
-    ],
-  }), [agingQtyBuckets]);
 
   const zoneAvgRiskBarData = useMemo(() => ({
     labels: zoneDecisionSummary.map((item) => item.zone),
@@ -1161,7 +1259,7 @@ function SlowMovingBasePage({
   }, [filteredSkus]);
 
   const zoneHeat = useMemo(() => {
-    const source = ["입고존", "보관존", "출고존", "반품존", "뮬랑"].map((zone) => ({
+    const source = SLOW_ZONE_OPTIONS.map((zone) => ({
       zone,
       count: 0,
       qty: 0,
@@ -2002,7 +2100,7 @@ function SlowMovingBasePage({
             onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))}
             placeholder="상품명, 바코드, 위치 코드"
           />
-          <button type="button" className="nw-btn primary" onClick={() => showToast(`검색 결과 ${formatNumber(filteredRows.length)}건`)}>검색</button>
+          <button type="button" className="nw-btn primary" onClick={() => showToast(`스캔 결과 ${formatNumber(filteredRows.length)}건`)}>스캔</button>
           <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="목록 보기">☷</button>
           <button type="button" className={`nw-icon-btn ${viewMode === "visual" ? "active" : ""}`} onClick={() => setViewMode("visual")} title="시각화 보기">⊞</button>
         </div>
@@ -2081,7 +2179,7 @@ function SlowMovingBasePage({
       </section>
 
       <section className="nw-chart-grid slow">
-        <ChartPanel title="좋은 위치 점유 우선순위 TOP 10" helper="점수가 높을수록 먼저 이동/처리 검토">
+        <ChartPanel title="좋은 위치 점유 우선순위 TOP 20" helper="점수가 높을수록 먼저 이동/처리 검토">
           <Bar data={topRiskBarData} options={topRiskBarOptions} />
         </ChartPanel>
 
@@ -2089,8 +2187,34 @@ function SlowMovingBasePage({
           <Bar data={zoneDecisionBarData} options={stackedQtyOptions} />
         </ChartPanel>
 
-        <ChartPanel title="체류 구간별 가용/예약 수량" helper="장기 체류 + 수량 큰 구간 우선 검토">
-          <Bar data={agingQtyBarData} options={stackedQtyOptions} />
+        <ChartPanel title="이동/처리 우선순위" helper="점수 55점 이상 위치 · [존 배지] · 구역 · 조치레벨" className="tall decision-list-panel">
+          {priorityActionRows.length ? (
+            <div className="nw-hotspot-list">
+              {priorityActionRows.map((row, index) => (
+                <button
+                  key={row.rowId}
+                  type="button"
+                  className={`nw-hotspot-row ${selectedLocationCode === row.locationCode ? "active" : ""}`}
+                  onClick={() => {
+                    setSelectedLocationCode(row.locationCode);
+                    setSelectedSkuId(row.skuId);
+                  }}
+                >
+                  <div className="rank">{index + 1}</div>
+                  <div className="meta">
+                    <strong>{row.locationCode}</strong>
+                    <em><span className="zone">{row.zone}</span> · {row.area} · {row.actionLevel}</em>
+                  </div>
+                  <div className="bar">
+                    <i style={{ width: `${Math.min(100, Math.max(row.priorityScore, 2))}%` }} />
+                  </div>
+                  <b>{row.priorityScore}점</b>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="nw-empty inline">우선 조치 대상이 없습니다.</div>
+          )}
         </ChartPanel>
       </section>
 
@@ -2099,7 +2223,7 @@ function SlowMovingBasePage({
           <div className="nw-panel-title-row">
             <h3>추출 결과</h3>
             <div className="nw-helper-text">
-              SKU 단위 조건으로 추출된 위치 목록입니다. 행 클릭 후 시각화 화면에서 이동/처리 우선순위를 확인할 수 있습니다.
+              SKU 단위 조건으로 추출된 위치 목록 상위 20건입니다. 행 클릭 후 시각화 화면에서 이동/처리 우선순위를 확인할 수 있습니다.
             </div>
           </div>
 
@@ -2121,7 +2245,7 @@ function SlowMovingBasePage({
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map((row) => (
+                {listDisplayRows.map((row) => (
                   <tr
                     key={row.rowId}
                     className={selectedLocationCode === row.locationCode ? "selected-row" : ""}
@@ -2173,86 +2297,31 @@ function SlowMovingBasePage({
                 <div><span>가용/예약 합계</span><strong>{formatNumber(summary.totalAvailable)} / {formatNumber(summary.totalReserved)}</strong></div>
               </div>
 
-              <section className="nw-chart-grid slow-visual-main">
-                <section className="nw-chart-panel">
-                  <div className="nw-panel-title-row mini">
-                    <h4>이동/처리 우선순위</h4>
-                    <div className="nw-helper-text">점수 55점 이상 위치 · 리스트 표기: [존 배지] · 구역 · 조치레벨</div>
-                  </div>
-                  <div className="nw-chart-body decision-list">
-                    {priorityActionRows.length ? (
-                      <div className="nw-hotspot-list">
-                        {priorityActionRows.map((row, index) => (
-                          <button
-                            key={row.rowId}
-                            type="button"
-                            className={`nw-hotspot-row ${selectedLocationCode === row.locationCode ? "active" : ""}`}
-                            onClick={() => {
-                              setSelectedLocationCode(row.locationCode);
-                              setSelectedSkuId(row.skuId);
-                            }}
-                          >
-                            <div className="rank">{index + 1}</div>
-                            <div className="meta">
-                              <strong>{row.locationCode}</strong>
-                              <em><span className="zone">{row.zone}</span> · {row.area} · {row.actionLevel}</em>
-                            </div>
-                            <div className="bar">
-                              <i style={{ width: `${Math.min(100, Math.max(row.priorityScore, 2))}%` }} />
-                            </div>
-                            <b>{row.priorityScore}점</b>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="nw-empty inline">우선 조치 대상이 없습니다.</div>
-                    )}
-                  </div>
-                </section>
-              </section>
-
               <section className="nw-panel slow-zone-visual-panel">
                 <div className="nw-panel-title-row mini">
                   <h4>존별 시각화</h4>
-                  <div className="nw-helper-text">리스트와 전환되는 시각화 영역으로, 5개 존(입고/보관/출고/반품/뮬랑)을 모두 카드로 표시합니다. 재고 수량은 가용 기준이며 예약은 별도 표기합니다.</div>
+                  <div className="nw-helper-text">존 분포와 이동/처리 우선순위를 같은 카드 안에서 같이 읽도록 재구성했습니다. 각 존의 조치 밀도와 평균 리스크를 함께 표시합니다.</div>
                 </div>
                 <div className="nw-zone-visual-grid">
                   {zoneDecisionSummary.map((item) => {
                     const priorityPct = item.totalQty > 0 ? (item.priorityQty / item.totalQty) * 100 : 0;
-                    const riskPct = Math.min(100, Math.max(item.avgRisk, 0));
-                    const sampleRows = item.samples.length
-                      ? [
-                        ...item.samples,
-                        ...Array.from({ length: Math.max(0, 2 - item.samples.length) }, (_, index) => ({
-                          key: `pad-${index}`,
-                          placeholder: true,
-                          owner: "데이터 없음",
-                          productName: "해당 없음",
-                          area: "-",
-                          locationCode: "-",
-                          availableQty: 0,
-                          reservedQty: 0,
-                        })),
-                      ]
-                      : Array.from({ length: 2 }, (_, index) => ({
-                        key: `empty-${index}`,
-                        placeholder: true,
-                        owner: "데이터 없음",
-                        productName: "해당 없음",
-                        area: "-",
-                        locationCode: "-",
-                        availableQty: 0,
-                        reservedQty: 0,
-                      }));
                     return (
-                      <article key={item.zone} className="nw-zone-visual-card">
+                      <article key={item.zone} className={`nw-zone-visual-card ${item.urgencyTone}`}>
                         <div className="head">
-                          <span className="nw-zone-chip">{item.zone}</span>
+                          <div className="title-block">
+                            <span className="nw-zone-chip">{item.zone}</span>
+                            <strong>{item.headline}</strong>
+                          </div>
                           <em>{formatNumber(item.locationCount)}개 위치</em>
+                        </div>
+                        <div className="status-line">
+                          <span className={`status-badge ${item.urgencyTone}`}>
+                            {item.urgencyTone === "critical" ? "즉시 정리 권고" : item.urgencyTone === "warning" ? "우선 재배치 권고" : item.urgencyTone === "stable" ? "관찰 구간" : "데이터 없음"}
+                          </span>
+                          <b>조치 대상 {item.moveLocationCount} / {item.locationCount}</b>
                         </div>
                         <div className="metrics">
                           <div><span>재고 수량</span><strong>{formatNumber(item.availableQty)}</strong></div>
-                          <div><span>예약 수량</span><strong>{formatNumber(item.reservedQty)}</strong></div>
                           <div><span>우선 이동</span><strong>{formatNumber(item.priorityQty)}</strong></div>
                         </div>
                         <div className="bars">
@@ -2264,26 +2333,19 @@ function SlowMovingBasePage({
                             <i style={{ width: `${priorityPct}%` }} />
                           </div>
                         </div>
-                        <div className="bars risk">
-                          <div className="label">
+                        <div className="zone-compact-summary">
+                          <div>
+                            <span>예약 수량</span>
+                            <strong>{formatNumber(item.reservedQty)}</strong>
+                          </div>
+                          <div>
                             <span>평균 리스크</span>
-                            <b>{item.avgRisk.toFixed(1)}점</b>
+                            <strong>{item.avgRisk.toFixed(1)}점</strong>
                           </div>
-                          <div className="track">
-                            <i style={{ width: `${riskPct}%` }} />
+                          <div>
+                            <span>즉시 이동 위치</span>
+                            <strong>{formatNumber(item.urgentLocationCount)}개</strong>
                           </div>
-                        </div>
-                        <div className="samples">
-                          {sampleRows.map((sample, index) => (
-                            <div key={`${item.zone}-sample-${sample.key || index}`} className={`sample-item ${sample.placeholder ? "placeholder" : ""}`}>
-                              <strong>{sample.placeholder ? "데이터 없음" : `${sample.owner} · ${sample.productName}`}</strong>
-                              <div className="sample-meta">
-                                <span>구역 {sample.area || "-"}</span>
-                                <span>위치 {sample.locationCode || "-"}</span>
-                              </div>
-                              <em>재고 {formatNumber(sample.availableQty)} / 예약 {formatNumber(sample.reservedQty)}</em>
-                            </div>
-                          ))}
                         </div>
                       </article>
                     );
