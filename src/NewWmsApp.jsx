@@ -1988,7 +1988,6 @@ function LocationStockPage() {
   const [sortType, setSortType] = useState("기본");
   const [focusLocationId, setFocusLocationId] = useState("");
   const [selectedRowIds, setSelectedRowIds] = useState(() => new Set());
-  const [expandedRowIds, setExpandedRowIds] = useState(() => new Set());
   const selectAllRef = useRef(null);
 
   const sourceRows = useMemo(
@@ -2058,20 +2057,38 @@ function LocationStockPage() {
     return Object.entries(groups);
   }, [visualRows]);
 
+  const listCenterSummaries = useMemo(() => {
+    const map = {};
+    filteredRows.forEach((row) => {
+      if (!map[row.center]) {
+        map[row.center] = {
+          center: row.center,
+          stock: 0,
+          available: 0,
+          reserved: 0,
+          count: 0,
+          utilTotal: 0,
+        };
+      }
+      map[row.center].stock += row.stock;
+      map[row.center].available += row.available;
+      map[row.center].reserved += row.reserved;
+      map[row.center].count += 1;
+      map[row.center].utilTotal += row.util;
+    });
+    return Object.values(map)
+      .map((item) => ({
+        ...item,
+        reservedRatio: item.stock > 0 ? (item.reserved / item.stock) * 100 : 0,
+        avgUtil: item.count > 0 ? item.utilTotal / item.count : 0,
+      }))
+      .sort((a, b) => String(a.center).localeCompare(String(b.center)));
+  }, [filteredRows]);
+
   useEffect(() => {
     const visibleIds = new Set(filteredRows.map((row) => row.id));
 
     setSelectedRowIds((prev) => {
-      let changed = false;
-      const next = new Set();
-      prev.forEach((id) => {
-        if (visibleIds.has(id)) next.add(id);
-        else changed = true;
-      });
-      return changed ? next : prev;
-    });
-
-    setExpandedRowIds((prev) => {
       let changed = false;
       const next = new Set();
       prev.forEach((id) => {
@@ -2109,6 +2126,8 @@ function LocationStockPage() {
   };
 
   const selectionSummary = summarizeRows(selectedRows.length ? selectedRows : filteredRows);
+  const visualSummary = summarizeRows(filteredRows);
+  const selectionReservedPct = Math.min(100, Math.max(selectionSummary.reservedRatio, 0));
 
   const isAllSelected = filteredRows.length > 0 && filteredRows.every((row) => selectedRowIds.has(row.id));
 
@@ -2119,15 +2138,6 @@ function LocationStockPage() {
 
   const toggleRowSelection = (rowId) => {
     setSelectedRowIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(rowId)) next.delete(rowId);
-      else next.add(rowId);
-      return next;
-    });
-  };
-
-  const toggleExpand = (rowId) => {
-    setExpandedRowIds((prev) => {
       const next = new Set(prev);
       if (next.has(rowId)) next.delete(rowId);
       else next.add(rowId);
@@ -2165,7 +2175,6 @@ function LocationStockPage() {
       maxUtil: "",
     }));
     setSelectedRowIds(new Set([matched.id]));
-    setExpandedRowIds(new Set([matched.id]));
     setFocusLocationId(matched.id);
     setViewMode("list");
     showToast(`스캔 완료: ${matched.locationCode}`);
@@ -2187,7 +2196,6 @@ function LocationStockPage() {
     setViewMode("list");
     setSortType("기본");
     setSelectedRowIds(new Set());
-    setExpandedRowIds(new Set());
     showToast("필터를 초기화했습니다.");
   };
 
@@ -2202,15 +2210,24 @@ function LocationStockPage() {
 
       <section className="nw-panel">
         <div className="nw-inline-filter location-stock">
-          <select value={filters.owner} onChange={(event) => setFilters((prev) => ({ ...prev, owner: event.target.value }))}>
-            {ownerOptions.map((option) => <option key={option}>{option}</option>)}
-          </select>
-          <select value={filters.zone} onChange={(event) => setFilters((prev) => ({ ...prev, zone: event.target.value }))}>
-            {zoneOptions.map((option) => <option key={option}>{option}</option>)}
-          </select>
-          <select value={filters.area} onChange={(event) => setFilters((prev) => ({ ...prev, area: event.target.value }))}>
-            {areaOptions.map((option) => <option key={option}>{option}</option>)}
-          </select>
+          <label className="nw-inline-field">
+            <span>화주사</span>
+            <select value={filters.owner} onChange={(event) => setFilters((prev) => ({ ...prev, owner: event.target.value }))}>
+              {ownerOptions.map((option) => <option key={option}>{option}</option>)}
+            </select>
+          </label>
+          <label className="nw-inline-field">
+            <span>존</span>
+            <select value={filters.zone} onChange={(event) => setFilters((prev) => ({ ...prev, zone: event.target.value }))}>
+              {zoneOptions.map((option) => <option key={option}>{option}</option>)}
+            </select>
+          </label>
+          <label className="nw-inline-field">
+            <span>구역</span>
+            <select value={filters.area} onChange={(event) => setFilters((prev) => ({ ...prev, area: event.target.value }))}>
+              {areaOptions.map((option) => <option key={option}>{option}</option>)}
+            </select>
+          </label>
           <input
             type="text"
             value={filters.location}
@@ -2230,19 +2247,19 @@ function LocationStockPage() {
 
         <div className="nw-filter-grid location-stock">
           <label>
-            가용 재고 수량(최소)
+            가용 적재 수량(최소)
             <input type="number" value={filters.minAvailable} onChange={(event) => setFilters((prev) => ({ ...prev, minAvailable: event.target.value }))} />
           </label>
           <label>
-            가용 재고 수량(최대)
+            가용 적재 수량(최대)
             <input type="number" value={filters.maxAvailable} onChange={(event) => setFilters((prev) => ({ ...prev, maxAvailable: event.target.value }))} />
           </label>
           <label>
-            예약 재고 수량(최소)
+            미발송 수량(최소)
             <input type="number" value={filters.minReserved} onChange={(event) => setFilters((prev) => ({ ...prev, minReserved: event.target.value }))} />
           </label>
           <label>
-            예약 재고 수량(최대)
+            미발송 수량(최대)
             <input type="number" value={filters.maxReserved} onChange={(event) => setFilters((prev) => ({ ...prev, maxReserved: event.target.value }))} />
           </label>
           <label>
@@ -2263,26 +2280,21 @@ function LocationStockPage() {
 
       {viewMode === "visual" ? (
         <>
-          <section className="nw-summary-grid location-selection-kpi">
-            <article className="nw-summary-card selection-target">
-              <div className="label">합계 재고</div>
-              <strong>{formatNumber(selectionSummary.totalStock)}</strong>
-              <span>{selectedRows.length ? `선택 위치 ${formatNumber(selectedRows.length)}건 기준` : `전체 위치 ${formatNumber(filteredRows.length)}건 기준`}</span>
-            </article>
+          <section className="nw-summary-grid location-visual-kpi">
             <article className="nw-summary-card">
-              <div className="label">평균 적재 비율</div>
-              <strong>{selectionSummary.avgUtil.toFixed(1)}%</strong>
-              <span>선택 리스트 평균</span>
+              <div className="label">합계 재고</div>
+              <strong>{formatNumber(visualSummary.totalStock)}</strong>
+              <span>필터 조건 기준</span>
+            </article>
+            <article className="nw-summary-card warn">
+              <div className="label">미발송</div>
+              <strong>{formatNumber(visualSummary.totalReserved)}</strong>
+              <span>합계 대비 {visualSummary.reservedRatio.toFixed(1)}%</span>
             </article>
             <article className="nw-summary-card">
               <div className="label">위치 수</div>
-              <strong>{formatNumber(selectionSummary.locationCount)}</strong>
-              <span>대시보드 기준 위치</span>
-            </article>
-            <article className="nw-summary-card warn">
-              <div className="label">가용 / 예약 재고</div>
-              <strong>{formatNumber(selectionSummary.totalAvailable)} / {formatNumber(selectionSummary.totalReserved)}</strong>
-              <span>예약 비중 {selectionSummary.reservedRatio.toFixed(1)}%</span>
+              <strong>{formatNumber(visualSummary.locationCount)}</strong>
+              <span>평균 적재 비율 {visualSummary.avgUtil.toFixed(1)}%</span>
             </article>
           </section>
 
@@ -2310,12 +2322,22 @@ function LocationStockPage() {
                 <div key={center} className="nw-center-block location-visual">
                   <div className="nw-center-head">
                     <strong>{center}</strong>
-                    <span>재고: {formatNumber(totalStock)} / 예약: {formatNumber(totalReserved)}</span>
+                    <span>적재: {formatNumber(totalStock)} / 미발송: {formatNumber(totalReserved)}</span>
                     <em>{formatNumber(rows.length)}개 위치</em>
                   </div>
                   <div className="nw-location-card-grid">
                     {rows.map((row) => {
                       const intensity = getLocationIntensity(row.stock, row.capacity);
+                      const zoneTone = row.zone.includes("입고")
+                        ? "inbound"
+                        : row.zone.includes("출고")
+                          ? "outbound"
+                          : row.zone.includes("반품")
+                            ? "return"
+                            : "storage";
+                      const utilPct = Math.min(100, Math.max(row.util, 0));
+                      const stockFillPct = Math.min(100, Math.max(row.capacity > 0 ? (row.stock / row.capacity) * 100 : 0, 0));
+                      const reservedFillPct = Math.min(100, Math.max(row.stock > 0 ? (row.reserved / row.stock) * 100 : row.reserved > 0 ? 100 : 0, 0));
                       return (
                         <button
                           key={row.id}
@@ -2323,20 +2345,38 @@ function LocationStockPage() {
                           className={`nw-location-card-v2 ${intensity} ${row.reserved > 0 ? "has-reserved" : ""} ${focusLocationId === row.id ? "active" : ""}`}
                           onClick={() => setFocusLocationId(row.id)}
                         >
-                          <span className="nw-location-card-status">{row.stock > 0 ? "재고있음" : "재고없음"}</span>
-                          <div className="nw-location-card-numbers">
-                            <article>
-                              <span>재고</span>
-                              <strong>{formatNumber(row.stock)}</strong>
-                            </article>
-                            <article className="reserved">
-                              <span>예약</span>
-                              <strong>{formatNumber(row.reserved)}</strong>
-                            </article>
+                          <div className="nw-location-card-head">
+                            <div className="nw-location-card-headline">
+                              <strong className="nw-location-card-code">{row.locationCode}</strong>
+                              <span className={`nw-location-stock-flag ${row.stock > 0 ? "has-stock" : "empty-stock"}`}>{row.stock > 0 ? "재고있음" : "재고 없음"}</span>
+                            </div>
                           </div>
-                          <div className="nw-location-card-foot">
-                            <strong>{row.locationCode}</strong>
-                            <span>{row.zone} · 적재 비율 {row.util.toFixed(1)}%</span>
+
+                          <div className="nw-location-card-core">
+                            <div className="nw-location-card-metrics-line">
+                              <article className="metric stock" style={{ "--fill": `${stockFillPct}%` }}>
+                                <b>적재</b>
+                                <em>{formatNumber(row.stock)}</em>
+                              </article>
+                              <article className="metric reserved" style={{ "--fill": `${reservedFillPct}%` }}>
+                                <b>미발송</b>
+                                <em>{formatNumber(row.reserved)}</em>
+                              </article>
+                            </div>
+
+                            <div className="nw-location-card-meta">
+                              <span className={`zone-pill ${zoneTone}`}>{row.zone}</span>
+                            </div>
+
+                            <div className="nw-location-card-util">
+                              <div className="nw-location-util-head">
+                                <small>적재비율</small>
+                                <strong>{row.util.toFixed(1)}%</strong>
+                              </div>
+                              <div className="nw-location-util-bar">
+                                <i style={{ width: `${utilPct}%` }} />
+                              </div>
+                            </div>
                           </div>
                         </button>
                       );
@@ -2356,7 +2396,7 @@ function LocationStockPage() {
                       <li key={product.id}>
                         <strong>{product.name}</strong>
                         <span>{product.option}</span>
-                        <span>재고 {formatNumber(product.stock)} / 예약 {formatNumber(product.reserved)}</span>
+                        <span>적재 {formatNumber(product.stock)} / 미발송 {formatNumber(product.reserved)}</span>
                       </li>
                     ))}
                   </ul>
@@ -2369,34 +2409,112 @@ function LocationStockPage() {
         </>
       ) : (
         <>
-          <section className="nw-summary-grid location-selection-kpi">
-            <article className="nw-summary-card selection-target">
-              <div className="label">합계 재고</div>
-              <strong>{formatNumber(selectionSummary.totalStock)}</strong>
-              <span>{selectedRows.length ? `선택 위치 ${formatNumber(selectedRows.length)}건 기준` : `전체 위치 ${formatNumber(filteredRows.length)}건 기준`}</span>
-            </article>
-            <article className="nw-summary-card">
-              <div className="label">평균 적재 비율</div>
-              <strong>{selectionSummary.avgUtil.toFixed(1)}%</strong>
-              <span>선택 리스트 평균</span>
-            </article>
-            <article className="nw-summary-card">
-              <div className="label">위치 수</div>
-              <strong>{formatNumber(selectionSummary.locationCount)}</strong>
-              <span>대시보드 기준 위치</span>
-            </article>
-            <article className="nw-summary-card warn">
-              <div className="label">가용 / 예약 재고</div>
-              <strong>{formatNumber(selectionSummary.totalAvailable)} / {formatNumber(selectionSummary.totalReserved)}</strong>
-              <span>예약 비중 {selectionSummary.reservedRatio.toFixed(1)}%</span>
-            </article>
-          </section>
+          {selectedRows.length ? (
+            <section className="nw-location-selection-visual simple">
+              <article className="nw-location-kpi-card stock">
+                <div className="kpi-title-row">
+                  <span className="kpi-icon">📦</span>
+                  <div>
+                    <span className="title">합계 재고</span>
+                    <em>선택 {formatNumber(selectedRows.length)}개 위치</em>
+                  </div>
+                </div>
+                <strong>{formatNumber(selectionSummary.totalStock)}</strong>
+                <div className="kpi-pill neutral">
+                  <span>가용 / 미발송</span>
+                  <b>{formatNumber(selectionSummary.totalAvailable)} / {formatNumber(selectionSummary.totalReserved)}</b>
+                </div>
+              </article>
+
+              <article className="nw-location-kpi-card reserved">
+                <div className="kpi-title-row">
+                  <span className="kpi-icon">🚚</span>
+                  <div>
+                    <span className="title">미발송</span>
+                    <em>합계 대비 {selectionReservedPct.toFixed(1)}%</em>
+                  </div>
+                </div>
+                <strong>{formatNumber(selectionSummary.totalReserved)}</strong>
+                <div className="kpi-pill">
+                  <span>비율</span>
+                  <b>{selectionReservedPct.toFixed(1)}%</b>
+                </div>
+              </article>
+
+              <article className="nw-location-kpi-card location-count">
+                <div className="kpi-title-row">
+                  <span className="kpi-icon">📍</span>
+                  <div>
+                    <span className="title">위치 수</span>
+                    <em>평균 적재 {selectionSummary.avgUtil.toFixed(1)}%</em>
+                  </div>
+                </div>
+                <strong>{formatNumber(selectionSummary.locationCount)}</strong>
+                <div className="kpi-pill neutral">
+                  <span>평균 적재 비율</span>
+                  <b>{selectionSummary.avgUtil.toFixed(1)}%</b>
+                </div>
+              </article>
+            </section>
+          ) : null}
 
           <section className="nw-panel">
             <div className="nw-panel-title-row">
               <h3>위치별 리스트</h3>
               <div className="nw-helper-text">체크박스로 선택하면 상단 대시보드가 선택 기준으로 갱신됩니다.</div>
             </div>
+
+            {listCenterSummaries.length ? (
+              <div className="nw-location-center-summary">
+                {listCenterSummaries.map((item) => {
+                  const reservedPct = Math.min(100, Math.max(item.reservedRatio, 0));
+                  const availablePct = 100 - reservedPct;
+                  const utilPct = Math.min(100, Math.max(item.avgUtil, 0));
+                  return (
+                    <article key={item.center} className="nw-location-center-card">
+                      <div className="nw-location-center-head">
+                        <strong>{item.center}</strong>
+                        <em>{formatNumber(item.count)}개 위치</em>
+                      </div>
+
+                      <div className="nw-location-center-metrics">
+                        <div>
+                          <span>적재</span>
+                          <b>{formatNumber(item.stock)}</b>
+                        </div>
+                        <div>
+                          <span>미발송</span>
+                          <b>{formatNumber(item.reserved)}</b>
+                        </div>
+                      </div>
+
+                      <div className="nw-location-center-graphic">
+                        <div className="nw-center-bar-label">
+                          <span>가용 / 미발송 구성</span>
+                          <em>미발송 {reservedPct.toFixed(1)}%</em>
+                        </div>
+                        <div className="nw-center-stack-bar">
+                          <i className="available" style={{ width: `${availablePct}%` }} />
+                          <i className="reserved" style={{ width: `${reservedPct}%` }} />
+                        </div>
+                        <div className="nw-center-bar-label">
+                          <span>평균 적재 비율</span>
+                          <em>{item.avgUtil.toFixed(1)}%</em>
+                        </div>
+                        <div className="nw-center-util-bar">
+                          <i style={{ width: `${utilPct}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="nw-location-center-foot">
+                        <span>가용 {formatNumber(item.available)}</span>
+                        <span>평균 적재 {item.avgUtil.toFixed(1)}%</span>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
 
             <div className="nw-table-wrap">
               <table className="nw-table nw-location-list-table">
@@ -2416,93 +2534,60 @@ function LocationStockPage() {
                         }}
                       />
                     </th>
-                    <th className="expand" />
                     <th>센터</th>
                     <th>존</th>
                     <th>구역</th>
                     <th>위치</th>
+                    <th>적재 상태</th>
+                    <th>상품 상세</th>
                     <th>합계 재고</th>
-                    <th>가용 재고</th>
-                    <th>예약 재고</th>
+                    <th>가용 적재</th>
+                    <th>미발송</th>
                     <th>적재 비율</th>
-                    <th>상품 종수</th>
+                    <th>품목 총 수량</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {listRows.flatMap((row) => {
+                  {listRows.map((row) => {
                     const isSelected = selectedRowIds.has(row.id);
-                    const isExpanded = expandedRowIds.has(row.id);
                     const intensity = getLocationIntensity(row.stock, row.capacity);
-                    const rows = [
+                    const itemTotalQty = row.products.reduce((sum, product) => sum + product.stock, 0);
+                    return (
                       <tr
-                        key={`${row.id}-main`}
+                        key={row.id}
                         className={`${focusLocationId === row.id ? "selected-row" : ""} ${isSelected ? "checked-row" : ""} nw-click-row`}
                         onClick={() => setFocusLocationId(row.id)}
                       >
                         <td className="check" onClick={(event) => event.stopPropagation()}>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleRowSelection(row.id)} />
                         </td>
-                        <td className="expand" onClick={(event) => event.stopPropagation()}>
-                          <button
-                            type="button"
-                            className={`nw-row-expand-btn ${isExpanded ? "open" : ""}`}
-                            onClick={() => toggleExpand(row.id)}
-                          >
-                            ▸
-                          </button>
-                        </td>
                         <td>{row.center}</td>
                         <td><span className="nw-zone-chip">{row.zone}</span></td>
                         <td>{row.areaCode}</td>
                         <td>{row.locationCode}</td>
+                        <td><span className={`nw-stock-state ${row.stock > 0 ? "has-stock" : "empty-stock"}`}>{row.stock > 0 ? "재고있음" : "재고 없음"}</span></td>
+                        <td className="nw-location-product-cell">
+                          {row.products.length ? (
+                            <div className="nw-location-product-list">
+                              {row.products.map((product) => (
+                                <div key={`${row.id}-${product.id}`} className="item">
+                                  <strong>{product.name} / {product.option}</strong>
+                                  <span>{product.barcode}</span>
+                                  <em>적재 {formatNumber(product.stock)} · 가용 {formatNumber(product.available)} · 미발송 {formatNumber(product.reserved)}</em>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="nw-empty-inline">-</span>
+                          )}
+                        </td>
                         <td>{formatNumber(row.stock)}</td>
                         <td>{formatNumber(row.available)}</td>
                         <td>{formatNumber(row.reserved)}</td>
                         <td><span className={`nw-util-pill ${intensity}`}>{row.util.toFixed(1)}%</span></td>
-                        <td>{formatNumber(row.products.length)}</td>
-                      </tr>,
-                    ];
-
-                    if (isExpanded) {
-                      rows.push(
-                        <tr key={`${row.id}-expand`} className="nw-row-expand">
-                          <td colSpan={11}>
-                            {row.products.length ? (
-                              <div className="nw-row-expand-body">
-                                <table className="nw-mini-table">
-                                  <thead>
-                                    <tr>
-                                      <th>화주사</th>
-                                      <th>상품명/옵션</th>
-                                      <th>바코드</th>
-                                      <th>합계 재고</th>
-                                      <th>가용 재고</th>
-                                      <th>예약 재고</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {row.products.map((product) => (
-                                      <tr key={`${row.id}-${product.id}`}>
-                                        <td>{product.owner}</td>
-                                        <td>{product.name} / {product.option}</td>
-                                        <td>{product.barcode}</td>
-                                        <td>{formatNumber(product.stock)}</td>
-                                        <td>{formatNumber(product.available)}</td>
-                                        <td>{formatNumber(product.reserved)}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            ) : (
-                              <div className="nw-empty inline">등록된 상품이 없습니다.</div>
-                            )}
-                          </td>
-                        </tr>,
-                      );
-                    }
-
-                    return rows;
+                        <td>{formatNumber(itemTotalQty)}</td>
+                      </tr>
+                    );
                   })}
                 </tbody>
               </table>
@@ -2520,7 +2605,7 @@ function LocationStockPage() {
                       <li key={product.id}>
                         <strong>{product.name}</strong>
                         <span>{product.option}</span>
-                        <span>재고 {formatNumber(product.stock)} / 가용 {formatNumber(product.available)} / 예약 {formatNumber(product.reserved)}</span>
+                        <span>적재 {formatNumber(product.stock)} / 가용 {formatNumber(product.available)} / 미발송 {formatNumber(product.reserved)}</span>
                       </li>
                     ))}
                   </ul>
