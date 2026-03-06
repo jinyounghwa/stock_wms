@@ -1651,7 +1651,6 @@ function SlowMovingBasePage({
         </div>
 
         <div className="nw-panel-actions">
-          <button type="button" className="nw-btn primary" onClick={() => showToast(`검색 결과 ${formatNumber(filteredRows.length)}건`)}>추출</button>
           <button type="button" className="nw-btn" onClick={() => showToast("엑셀 다운로드를 시작합니다 (데모)")}>엑셀 다운로드</button>
           <button type="button" className="nw-btn" onClick={handleReset}>새로 검색</button>
         </div>
