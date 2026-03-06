@@ -573,6 +573,108 @@ function buildSystemStockRows() {
 
 const SYSTEM_STOCK_ROWS = buildSystemStockRows();
 
+const INITIAL_SURVEY_ENTRIES = [
+  {
+    id: "survey-seed-1",
+    owner: "화주사 2",
+    round: "2026-03-1차",
+    barcode: "880123456789",
+    locationCode: "WHO1-A01-01-01",
+    qty: 145,
+    memo: "파손 5개 제외",
+    source: "바코드스캔",
+    status: "조사중",
+    worker: "김작업",
+    createdAt: "2026-03-04 09:15",
+    productName: "나이키 에어맥스 270",
+    option: "블랙/화이트, 270mm",
+  },
+  {
+    id: "survey-seed-2",
+    owner: "화주사 2",
+    round: "2026-03-1차",
+    barcode: "880987654321",
+    locationCode: "WHO1-B02-01-01",
+    qty: 200,
+    memo: "",
+    source: "개별입력",
+    status: "실입고완료",
+    worker: "이관리",
+    createdAt: "2026-03-04 09:32",
+    productName: "아디다스 울트라부스트",
+    option: "핑크, 250mm",
+  },
+  {
+    id: "survey-seed-3",
+    owner: "안나엔모드",
+    round: "2026-02-3차",
+    barcode: "81231341295122",
+    locationCode: "4E-AX-02-1",
+    qty: 1,
+    memo: "",
+    source: "CSV업로드",
+    status: "실입고완료",
+    worker: "박검수",
+    createdAt: "2026-03-03 16:24",
+    productName: "(아동)❤쫄깃기본티(1+1)[티셔츠BANX23]",
+    option: "아이보리,M",
+  },
+];
+
+const INITIAL_ADJUSTMENTS = [
+  {
+    id: "adj-seed-1",
+    requestedAt: "2026-01-26 15:45",
+    owner: "화주사 2",
+    worker: "김작업",
+    productName: "나이키 에어맥스 270",
+    option: "블랙/화이트, 270mm",
+    barcode: "880123456789",
+    brand: "나이키코리아",
+    zone: "보관존",
+    locationCode: "4E-A-01-1",
+    systemQty: 150,
+    actualQty: 145,
+    reason: "파손 제품 발견",
+    status: "승인됨",
+    approvedAt: "2026-01-26 16:02",
+  },
+  {
+    id: "adj-seed-2",
+    requestedAt: "2026-01-25 11:20",
+    owner: "화주사 2",
+    worker: "김작업",
+    productName: "테스트테스트",
+    option: "옵션2",
+    barcode: "1234567890124",
+    brand: "브랜드B",
+    zone: "보관존",
+    locationCode: "2A-C-03-2",
+    systemQty: 150,
+    actualQty: 140,
+    reason: "분실",
+    status: "거절됨",
+    approvedAt: "2026-01-25 11:40",
+  },
+  {
+    id: "adj-seed-3",
+    requestedAt: "2026-01-26 15:45",
+    owner: "화주사 2",
+    worker: "김작업",
+    productName: "테스트테스트",
+    option: "옵션1",
+    barcode: "1234567890123",
+    brand: "브랜드A",
+    zone: "입고존",
+    locationCode: "3C-B-02-5",
+    systemQty: 150,
+    actualQty: 155,
+    reason: "재고 실사 결과 추가 발견",
+    status: "대기중",
+    approvedAt: "",
+  },
+];
+
 function getSlowGrade(daysNoOutbound) {
   if (daysNoOutbound >= 365) return { label: "위험", className: "risk" };
   if (daysNoOutbound >= 180) return { label: "경고", className: "warning" };
@@ -683,14 +785,14 @@ function SidebarLayout({ title, children }) {
           <NavLink to="/inventory-survey" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
             재고조사
           </NavLink>
+          <NavLink to="/inventory-adjustment" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
+            재고조정
+          </NavLink>
           <NavLink to="/location-stock" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
             위치별 재고 현황
           </NavLink>
           <NavLink to="/slow-moving" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
             부진재고
-          </NavLink>
-          <NavLink to="/slow-moving-2" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
-            부진재고2
           </NavLink>
         </nav>
 
@@ -738,7 +840,7 @@ function intensityColor(intensity) {
 function SlowMovingBasePage({
   menuTitle = "부진재고",
   pageTitle = "부진재고",
-  pageDescription = "SKU 단위 필터 + 위치 단위 출력, 리스트/2D 시각화 전환",
+  pageDescription = "SKU 단위 필터 + 위치 단위 출력, 대시보드/리스트 전환",
   visualVariant = "v1",
 } = {}) {
   const { toast, showToast } = useToast();
@@ -753,7 +855,7 @@ function SlowMovingBasePage({
     brand: "ALL",
     query: "",
   });
-  const [viewMode, setViewMode] = useState("list");
+  const [viewMode, setViewMode] = useState("visual");
   const [selectedSkuId, setSelectedSkuId] = useState("sku-001");
   const [selectedLocationCode, setSelectedLocationCode] = useState("");
   const [routeSourceCode, setRouteSourceCode] = useState("");
@@ -1471,7 +1573,7 @@ function SlowMovingBasePage({
       brand: "ALL",
       query: "",
     });
-    setViewMode("list");
+    setViewMode("visual");
     setSelectedLocationCode("");
     setRouteSourceCode("");
     setRouteTargetCode("");
@@ -1870,17 +1972,6 @@ function SlowMovingBasePage({
   );
 }
 
-function SlowMoving2Page() {
-  return (
-    <SlowMovingBasePage
-      menuTitle="부진재고2"
-      pageTitle="부진재고"
-      pageDescription="부진재고 복사판 - 시각화 방식만 다르게 구성"
-      visualVariant="v2"
-    />
-  );
-}
-
 function SlowMovingPage() {
   return <SlowMovingBasePage />;
 }
@@ -1905,6 +1996,8 @@ function LocationStockPage() {
   const [viewMode, setViewMode] = useState("list");
   const [sortType, setSortType] = useState("기본");
   const [focusLocationId, setFocusLocationId] = useState("");
+  const [scanLocationCode, setScanLocationCode] = useState("");
+  const [scannedLocationId, setScannedLocationId] = useState("");
 
   const sourceRows = useMemo(
     () =>
@@ -1950,6 +2043,16 @@ function LocationStockPage() {
     }),
     [filters, sourceRows],
   );
+
+  useEffect(() => {
+    if (!filteredRows.length) {
+      setFocusLocationId("");
+      return;
+    }
+    if (!focusLocationId || !filteredRows.some((row) => row.id === focusLocationId)) {
+      setFocusLocationId(filteredRows[0].id);
+    }
+  }, [filteredRows, focusLocationId]);
 
   const summary = useMemo(() => {
     const total = filteredRows.reduce((sum, row) => sum + row.stock, 0);
@@ -2338,6 +2441,45 @@ function LocationStockPage() {
   }), []);
 
   const focusLocation = filteredRows.find((row) => row.id === focusLocationId) || null;
+  const scannedLocation = sourceRows.find((row) => row.id === scannedLocationId) || null;
+  const scannedActualQty = useMemo(() => {
+    if (!scannedLocation) return 0;
+    const seed = scannedLocation.locationCode
+      .split("")
+      .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    const diff = (seed % 7) - 3;
+    return Math.max(scannedLocation.stock + diff, 0);
+  }, [scannedLocation]);
+  const scannedDiffQty = scannedLocation ? scannedActualQty - scannedLocation.stock : 0;
+
+  const findLocationByScan = (value) => {
+    const normalized = normalizeLookupValue(value).toUpperCase();
+    if (!normalized) return null;
+    return sourceRows.find((row) => {
+      const code = String(row.locationCode).toUpperCase();
+      return code === normalized || code.includes(normalized);
+    }) || null;
+  };
+
+  const handleLocationScan = () => {
+    const matched = findLocationByScan(scanLocationCode);
+    if (!matched) {
+      showToast("스캔한 로케이션을 찾지 못했습니다.");
+      return;
+    }
+    setScannedLocationId(matched.id);
+    setFocusLocationId(matched.id);
+    setFilters((prev) => ({
+      ...prev,
+      owner: prev.owner,
+      center: "ALL",
+      zone: "ALL",
+      area: "ALL",
+      query: matched.locationCode,
+    }));
+    setViewMode("dashboard");
+    showToast(`로케이션 스캔 완료: ${matched.locationCode}`);
+  };
 
   const resetFilters = () => {
     setFilters({
@@ -2357,6 +2499,8 @@ function LocationStockPage() {
     });
     setViewMode("list");
     setSortType("기본");
+    setScanLocationCode("");
+    setScannedLocationId("");
     showToast("필터를 초기화했습니다.");
   };
 
@@ -2365,7 +2509,7 @@ function LocationStockPage() {
       <div className="nw-page-head">
         <div>
           <h2>위치별 재고</h2>
-          <p>리스트 뷰와 2D 시각화 뷰를 전환해 위치 점유 현황을 확인합니다.</p>
+          <p>리스트 뷰와 대시보드 뷰를 전환하고, 로케이션 스캔으로 즉시 대조합니다.</p>
         </div>
       </div>
 
@@ -2382,7 +2526,14 @@ function LocationStockPage() {
           />
           <button type="button" className="nw-btn primary" onClick={() => showToast(`조회 결과 ${formatNumber(filteredRows.length)}건`)}>검색</button>
           <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")}>☷</button>
-          <button type="button" className={`nw-icon-btn ${viewMode === "visual" ? "active" : ""}`} onClick={() => setViewMode("visual")}>⊞</button>
+          <button type="button" className={`nw-icon-btn ${viewMode === "dashboard" ? "active" : ""}`} onClick={() => setViewMode("dashboard")} title="대시보드 보기">◫</button>
+          <input
+            type="text"
+            value={scanLocationCode}
+            onChange={(event) => setScanLocationCode(event.target.value)}
+            placeholder="로케이션 바코드 스캔"
+          />
+          <button type="button" className="nw-btn primary" onClick={handleLocationScan}>스캔 조회</button>
         </div>
 
         <div className="nw-filter-grid location">
@@ -2440,65 +2591,224 @@ function LocationStockPage() {
 
         <div className="nw-panel-actions">
           <button type="button" className="nw-btn" onClick={() => showToast("엑셀 다운로드를 시작합니다 (데모)")}>엑셀 다운로드</button>
-          <button type="button" className="nw-btn" onClick={() => showToast("재고조사 화면으로 이동합니다")}>재고조사 이동</button>
           <button type="button" className="nw-btn" onClick={resetFilters}>초기화</button>
         </div>
       </section>
 
-      <section className="nw-summary-grid location-kpi">
-        <article className="nw-summary-card">
-          <div className="label">합계 재고</div>
-          <strong>{formatNumber(summary.total)}</strong>
-          <span>전체 조건 기준</span>
-        </article>
-        <article className="nw-summary-card">
-          <div className="label">즉시출고 가능</div>
-          <strong>{formatNumber(summary.available)}</strong>
-          <span>가용 재고 합산</span>
-        </article>
-        <article className="nw-summary-card warn">
-          <div className="label">보류 수량</div>
-          <strong>{formatNumber(summary.reserved)}</strong>
-          <span>합계 대비 비중 {summary.total ? `${Math.round((summary.reserved / summary.total) * 100)}%` : "0%"}</span>
-        </article>
-        <article className="nw-summary-card">
-          <div className="label">위치 수 / 평균 공간 점유율</div>
-          <strong>{formatNumber(summary.locationCount)} / {summary.avgUtil.toFixed(1)}%</strong>
-          <span>필터 결과 기준</span>
-        </article>
-      </section>
+      {scannedLocation ? (
+        <section className="nw-panel nw-location-scan-result">
+          <div className="nw-panel-title-row">
+            <h3>로케이션 스캔 대조 결과</h3>
+            <div className="nw-helper-text">{scannedLocation.locationCode} / {scannedLocation.center} / {scannedLocation.zone}</div>
+          </div>
+          <div className="nw-location-scan-kpi">
+            <article>
+              <span>전산 재고</span>
+              <strong>{formatNumber(scannedLocation.stock)}</strong>
+            </article>
+            <article>
+              <span>실재고(실사)</span>
+              <strong>{formatNumber(scannedActualQty)}</strong>
+            </article>
+            <article className={scannedDiffQty > 0 ? "text-plus" : scannedDiffQty < 0 ? "text-minus" : ""}>
+              <span>차이 수량</span>
+              <strong>{scannedDiffQty > 0 ? `+${formatNumber(scannedDiffQty)}` : formatNumber(scannedDiffQty)}</strong>
+            </article>
+          </div>
+          <div className="nw-helper-text">웹 바코드 입력/스캐너 연동으로 해당 위치의 전산 재고와 실사 재고를 즉시 대조하는 데모입니다.</div>
+        </section>
+      ) : null}
 
-      <section className="nw-chart-grid location">
-        <ChartPanel title="센터별 즉시출고/보류 스택" helper="전체 조건 기준">
-          <Bar data={centerStackData} options={centerStackOptions} />
-        </ChartPanel>
+      {viewMode === "dashboard" ? (
+        <>
+          <section className="nw-summary-grid location-kpi">
+            <article className="nw-summary-card">
+              <div className="label">합계 재고</div>
+              <strong>{formatNumber(summary.total)}</strong>
+              <span>전체 조건 기준</span>
+            </article>
+            <article className="nw-summary-card">
+              <div className="label">즉시출고 가능</div>
+              <strong>{formatNumber(summary.available)}</strong>
+              <span>가용 재고 합산</span>
+            </article>
+            <article className="nw-summary-card warn">
+              <div className="label">보류 수량</div>
+              <strong>{formatNumber(summary.reserved)}</strong>
+              <span>합계 대비 비중 {summary.total ? `${Math.round((summary.reserved / summary.total) * 100)}%` : "0%"}</span>
+            </article>
+            <article className="nw-summary-card">
+              <div className="label">위치 수 / 평균 공간 점유율</div>
+              <strong>{formatNumber(summary.locationCount)} / {summary.avgUtil.toFixed(1)}%</strong>
+              <span>필터 결과 기준</span>
+            </article>
+          </section>
 
-        <ChartPanel title="공간 점유율 분포" helper="점유율 구간별 위치 수">
-          <Doughnut data={utilDistributionData} options={utilDistributionOptions} />
-        </ChartPanel>
+          <section className="nw-chart-grid location">
+            <ChartPanel title="센터별 즉시출고/보류 스택" helper="전체 조건 기준">
+              <Bar data={centerStackData} options={centerStackOptions} />
+            </ChartPanel>
 
-        <ChartPanel title="핫스팟 TOP 5 추이" helper="공간 점유율(%) + 보류 수량">
-          {hotSpots.length ? <Line data={hotspotLineData} options={hotspotLineOptions} /> : <div className="nw-empty inline">표시할 위치가 없습니다.</div>}
-        </ChartPanel>
+            <ChartPanel title="공간 점유율 분포" helper="점유율 구간별 위치 수">
+              <Doughnut data={utilDistributionData} options={utilDistributionOptions} />
+            </ChartPanel>
 
-        <ChartPanel title="존별 공간 점유율 & 가용 재고" helper="작업 존 단위 비교">
-          {zoneUtilSummary.length ? <Bar data={zoneUtilBarData} options={zoneUtilBarOptions} /> : <div className="nw-empty inline">표시할 존 데이터가 없습니다.</div>}
-        </ChartPanel>
+            <ChartPanel title="핫스팟 TOP 5 추이" helper="공간 점유율(%) + 보류 수량">
+              {hotSpots.length ? <Line data={hotspotLineData} options={hotspotLineOptions} /> : <div className="nw-empty inline">표시할 위치가 없습니다.</div>}
+            </ChartPanel>
 
-        <ChartPanel title="랙 구역별 즉시출고/보류" helper="상위 8개 구역">
-          {areaSummary.length ? <Bar data={areaStackData} options={areaStackOptions} /> : <div className="nw-empty inline">표시할 구역 데이터가 없습니다.</div>}
-        </ChartPanel>
+            <ChartPanel title="존별 공간 점유율 & 가용 재고" helper="작업 존 단위 비교">
+              {zoneUtilSummary.length ? <Bar data={zoneUtilBarData} options={zoneUtilBarOptions} /> : <div className="nw-empty inline">표시할 존 데이터가 없습니다.</div>}
+            </ChartPanel>
 
-        <ChartPanel title="화주사별 점유/보류 레이더" helper="평균 공간 점유율 vs 보류 비율">
-          {ownerSummary.length ? <Radar data={ownerRadarData} options={ownerRadarOptions} /> : <div className="nw-empty inline">표시할 화주사 데이터가 없습니다.</div>}
-        </ChartPanel>
-      </section>
+            <ChartPanel title="랙 구역별 즉시출고/보류" helper="상위 8개 구역">
+              {areaSummary.length ? <Bar data={areaStackData} options={areaStackOptions} /> : <div className="nw-empty inline">표시할 구역 데이터가 없습니다.</div>}
+            </ChartPanel>
 
-      {viewMode === "list" ? (
+            <ChartPanel title="화주사별 점유/보류 레이더" helper="평균 공간 점유율 vs 보류 비율">
+              {ownerSummary.length ? <Radar data={ownerRadarData} options={ownerRadarOptions} /> : <div className="nw-empty inline">표시할 화주사 데이터가 없습니다.</div>}
+            </ChartPanel>
+          </section>
+
+          <section className="nw-panel">
+            <div className="nw-panel-title-row">
+              <h3>2D 위치 대시보드</h3>
+              <div className="nw-sort-row">
+                {[
+                  "기본",
+                  "수량 높은순",
+                  "수량 낮은순",
+                ].map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={`nw-btn tiny ${sortType === label ? "active" : ""}`}
+                    onClick={() => setSortType(label)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {Object.entries(groupedVisualRows).map(([center, rows]) => {
+              const total = rows.reduce((sum, row) => sum + row.stock, 0);
+              const reserved = rows.reduce((sum, row) => sum + row.reserved, 0);
+              const centerBubbleData = {
+                datasets: [
+                  {
+                    label: `${center} 위치`,
+                    data: rows.map((row, index) => ({
+                      x: (index % 6) + 1,
+                      y: Math.floor(index / 6) + 1,
+                      r: Math.max(6, Math.min(24, 6 + row.stock * 0.18)),
+                      locationCode: row.locationCode,
+                      areaCode: row.areaCode,
+                      stock: row.stock,
+                      available: row.available,
+                      reserved: row.reserved,
+                      util: row.util,
+                    })),
+                    backgroundColor: rows.map((row) => intensityColor(getLocationIntensity(row.stock, row.capacity))),
+                    borderColor: rows.map((row) => (row.reserved > 0 ? CHART_COLORS.amber : "#ffffff")),
+                    borderWidth: rows.map((row) => (row.reserved > 0 ? 2 : 1)),
+                  },
+                ],
+              };
+              const centerBubbleOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    backgroundColor: "#1f2c3f",
+                    bodyFont: { family: "Noto Sans KR", size: 11 },
+                    callbacks: {
+                      label: (context) => {
+                        const row = context.raw;
+                        return `${row.locationCode} (${row.areaCode}) | 보관 ${formatNumber(row.stock)} | 즉시출고 ${formatNumber(row.available)} | 보류 ${formatNumber(row.reserved)} | 점유율 ${row.util.toFixed(1)}%`;
+                      },
+                    },
+                  },
+                },
+                scales: {
+                  x: {
+                    min: 0.5,
+                    max: 6.6,
+                    ticks: { display: false },
+                    grid: { color: "#edf2f9" },
+                    border: { color: CHART_COLORS.line },
+                  },
+                  y: {
+                    min: 0.5,
+                    max: Math.max(Math.ceil(rows.length / 6), 1) + 0.6,
+                    reverse: true,
+                    ticks: { display: false },
+                    grid: { color: "#edf2f9" },
+                    border: { color: CHART_COLORS.line },
+                  },
+                },
+              };
+
+              return (
+                <div key={center} className="nw-center-block chart-mode">
+                  <div className="nw-center-head">
+                    <strong>{center}</strong>
+                    <span>보관: {formatNumber(total)} / 보류: {formatNumber(reserved)}</span>
+                    <em>{formatNumber(rows.length)}개 위치</em>
+                  </div>
+                  <div className="nw-center-visual-layout">
+                    <div className="nw-center-map">
+                      <Bubble data={centerBubbleData} options={centerBubbleOptions} />
+                    </div>
+                    <div className="nw-center-hot-list">
+                      {rows.slice(0, 8).map((row) => {
+                        const util = row.util;
+                        return (
+                          <button
+                            key={row.id}
+                            type="button"
+                            className={`nw-compact-cell ${focusLocationId === row.id ? "active" : ""}`}
+                            onClick={() => setFocusLocationId(row.id)}
+                          >
+                            <div className="title">{row.locationCode}</div>
+                            <div className="meta">{row.zone} · {row.areaCode}</div>
+                            <div className="qty">{formatNumber(row.stock)} / 보류 {formatNumber(row.reserved)}</div>
+                            <div className="mini"><i style={{ width: `${Math.max(util, 4)}%` }} /></div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {focusLocation ? (
+              <section className="nw-focus-panel">
+                <h4>위치 상세 - {focusLocation.locationCode}</h4>
+                <p>{focusLocation.center} / {focusLocation.zone} / {focusLocation.areaCode} / 공간 점유율 {focusLocation.util.toFixed(1)}%</p>
+                {focusLocation.products.length ? (
+                  <ul>
+                    {focusLocation.products.map((product) => (
+                      <li key={product.id}>
+                        <strong>{product.name}</strong>
+                        <span>{product.option}</span>
+                        <span>보관 {formatNumber(product.stock)} / 보류 {formatNumber(product.reserved)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="nw-empty inline">등록된 상품이 없습니다.</div>
+                )}
+              </section>
+            ) : null}
+          </section>
+        </>
+      ) : (
         <section className="nw-panel">
           <div className="nw-panel-title-row">
             <h3>위치별 리스트</h3>
-            <div className="nw-helper-text">위치와 등록 상품을 같은 행에서 바로 확인</div>
+            <div className="nw-helper-text">행을 클릭하면 하단 상세가 갱신됩니다.</div>
           </div>
 
           <div className="nw-table-wrap">
@@ -2521,7 +2831,7 @@ function LocationStockPage() {
                 {filteredRows.map((row) => {
                   const util = row.util;
                   return (
-                    <tr key={row.id}>
+                    <tr key={row.id} className={`${focusLocationId === row.id ? "selected-row" : ""} nw-click-row`} onClick={() => setFocusLocationId(row.id)}>
                       <td>{row.center}</td>
                       <td><span className="nw-zone-chip">{row.zone}</span></td>
                       <td>{row.areaCode}</td>
@@ -2555,137 +2865,19 @@ function LocationStockPage() {
           </div>
 
           {!filteredRows.length ? <div className="nw-empty">조회 조건에 해당하는 위치가 없습니다.</div> : null}
-        </section>
-      ) : (
-        <section className="nw-panel">
-          <div className="nw-panel-title-row">
-            <h3>2D 시각화</h3>
-            <div className="nw-sort-row">
-              {[
-                "기본",
-                "수량 높은순",
-                "수량 낮은순",
-              ].map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  className={`nw-btn tiny ${sortType === label ? "active" : ""}`}
-                  onClick={() => setSortType(label)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {Object.entries(groupedVisualRows).map(([center, rows]) => {
-            const total = rows.reduce((sum, row) => sum + row.stock, 0);
-            const reserved = rows.reduce((sum, row) => sum + row.reserved, 0);
-            const centerBubbleData = {
-              datasets: [
-                {
-                  label: `${center} 위치`,
-                  data: rows.map((row, index) => ({
-                    x: (index % 6) + 1,
-                    y: Math.floor(index / 6) + 1,
-                    r: Math.max(6, Math.min(24, 6 + row.stock * 0.18)),
-                    locationCode: row.locationCode,
-                    areaCode: row.areaCode,
-                    stock: row.stock,
-                    available: row.available,
-                    reserved: row.reserved,
-                    util: row.util,
-                  })),
-                  backgroundColor: rows.map((row) => intensityColor(getLocationIntensity(row.stock, row.capacity))),
-                  borderColor: rows.map((row) => (row.reserved > 0 ? CHART_COLORS.amber : "#ffffff")),
-                  borderWidth: rows.map((row) => (row.reserved > 0 ? 2 : 1)),
-                },
-              ],
-            };
-            const centerBubbleOptions = {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  backgroundColor: "#1f2c3f",
-                  bodyFont: { family: "Noto Sans KR", size: 11 },
-                  callbacks: {
-                    label: (context) => {
-                      const row = context.raw;
-                      return `${row.locationCode} (${row.areaCode}) | 보관 ${formatNumber(row.stock)} | 즉시출고 ${formatNumber(row.available)} | 보류 ${formatNumber(row.reserved)} | 점유율 ${row.util.toFixed(1)}%`;
-                    },
-                  },
-                },
-              },
-              scales: {
-                x: {
-                  min: 0.5,
-                  max: 6.6,
-                  ticks: {
-                    display: false,
-                  },
-                  grid: { color: "#edf2f9" },
-                  border: { color: CHART_COLORS.line },
-                },
-                y: {
-                  min: 0.5,
-                  max: Math.max(Math.ceil(rows.length / 6), 1) + 0.6,
-                  reverse: true,
-                  ticks: {
-                    display: false,
-                  },
-                  grid: { color: "#edf2f9" },
-                  border: { color: CHART_COLORS.line },
-                },
-              },
-            };
-
-            return (
-              <div key={center} className="nw-center-block chart-mode">
-                <div className="nw-center-head">
-                  <strong>{center}</strong>
-                  <span>보관: {formatNumber(total)} / 보류: {formatNumber(reserved)}</span>
-                  <em>{formatNumber(rows.length)}개 위치</em>
-                </div>
-                <div className="nw-center-visual-layout">
-                  <div className="nw-center-map">
-                    <Bubble data={centerBubbleData} options={centerBubbleOptions} />
-                  </div>
-                  <div className="nw-center-hot-list">
-                    {rows.slice(0, 8).map((row) => {
-                      const util = row.util;
-                      return (
-                        <button
-                          key={row.id}
-                          type="button"
-                          className={`nw-compact-cell ${focusLocationId === row.id ? "active" : ""}`}
-                          onClick={() => setFocusLocationId(row.id)}
-                        >
-                          <div className="title">{row.locationCode}</div>
-                          <div className="meta">{row.zone} · {row.areaCode}</div>
-                          <div className="qty">{formatNumber(row.stock)} / 보류 {formatNumber(row.reserved)}</div>
-                          <div className="mini"><i style={{ width: `${Math.max(util, 4)}%` }} /></div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
 
           {focusLocation ? (
             <section className="nw-focus-panel">
-              <h4>위치 상세 - {focusLocation.locationCode}</h4>
+              <h4>리스트 선택 상세 - {focusLocation.locationCode}</h4>
               <p>{focusLocation.center} / {focusLocation.zone} / {focusLocation.areaCode} / 공간 점유율 {focusLocation.util.toFixed(1)}%</p>
               {focusLocation.products.length ? (
                 <ul>
                   {focusLocation.products.map((product) => (
-	                    <li key={product.id}>
-	                      <strong>{product.name}</strong>
-	                      <span>{product.option}</span>
-	                      <span>보관 {formatNumber(product.stock)} / 보류 {formatNumber(product.reserved)}</span>
-	                    </li>
+                    <li key={product.id}>
+                      <strong>{product.name}</strong>
+                      <span>{product.option}</span>
+                      <span>보관 {formatNumber(product.stock)} / 보류 {formatNumber(product.reserved)}</span>
+                    </li>
                   ))}
                 </ul>
               ) : (
@@ -4394,110 +4586,9 @@ function AdminAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
   );
 }
 
-function InventorySurveyPage() {
+function InventorySurveyPage({ surveyEntries, setSurveyEntries, adjustments, setAdjustments }) {
   const { toast, showToast } = useToast();
   const [activeTab, setActiveTab] = useState("lookup");
-  const [surveyEntries, setSurveyEntries] = useState([
-    {
-      id: "survey-seed-1",
-      owner: "화주사 2",
-      round: "2026-03-1차",
-      barcode: "880123456789",
-      locationCode: "WHO1-A01-01-01",
-      qty: 145,
-      memo: "파손 5개 제외",
-      source: "바코드스캔",
-      status: "조사중",
-      worker: "김작업",
-      createdAt: "2026-03-04 09:15",
-      productName: "나이키 에어맥스 270",
-      option: "블랙/화이트, 270mm",
-    },
-    {
-      id: "survey-seed-2",
-      owner: "화주사 2",
-      round: "2026-03-1차",
-      barcode: "880987654321",
-      locationCode: "WHO1-B02-01-01",
-      qty: 200,
-      memo: "",
-      source: "개별입력",
-      status: "실입고완료",
-      worker: "이관리",
-      createdAt: "2026-03-04 09:32",
-      productName: "아디다스 울트라부스트",
-      option: "핑크, 250mm",
-    },
-    {
-      id: "survey-seed-3",
-      owner: "안나엔모드",
-      round: "2026-02-3차",
-      barcode: "81231341295122",
-      locationCode: "4E-AX-02-1",
-      qty: 1,
-      memo: "",
-      source: "CSV업로드",
-      status: "실입고완료",
-      worker: "박검수",
-      createdAt: "2026-03-03 16:24",
-      productName: "(아동)❤쫄깃기본티(1+1)[티셔츠BANX23]",
-      option: "아이보리,M",
-    },
-  ]);
-  const [adjustments, setAdjustments] = useState([
-    {
-      id: "adj-seed-1",
-      requestedAt: "2026-01-26 15:45",
-      owner: "화주사 2",
-      worker: "김작업",
-      productName: "나이키 에어맥스 270",
-      option: "블랙/화이트, 270mm",
-      barcode: "880123456789",
-      brand: "나이키코리아",
-      zone: "보관존",
-      locationCode: "4E-A-01-1",
-      systemQty: 150,
-      actualQty: 145,
-      reason: "파손 제품 발견",
-      status: "승인됨",
-      approvedAt: "2026-01-26 16:02",
-    },
-    {
-      id: "adj-seed-2",
-      requestedAt: "2026-01-25 11:20",
-      owner: "화주사 2",
-      worker: "김작업",
-      productName: "테스트테스트",
-      option: "옵션2",
-      barcode: "1234567890124",
-      brand: "브랜드B",
-      zone: "보관존",
-      locationCode: "2A-C-03-2",
-      systemQty: 150,
-      actualQty: 140,
-      reason: "분실",
-      status: "거절됨",
-      approvedAt: "2026-01-25 11:40",
-    },
-    {
-      id: "adj-seed-3",
-      requestedAt: "2026-01-26 15:45",
-      owner: "화주사 2",
-      worker: "김작업",
-      productName: "테스트테스트",
-      option: "옵션1",
-      barcode: "1234567890123",
-      brand: "브랜드A",
-      zone: "입고존",
-      locationCode: "3C-B-02-5",
-      systemQty: 150,
-      actualQty: 155,
-      reason: "재고 실사 결과 추가 발견",
-      status: "대기중",
-      approvedAt: "",
-    },
-  ]);
-  const [adjustmentRole, setAdjustmentRole] = useState("worker");
   const surveyStats = useMemo(() => ({
     total: surveyEntries.length,
     inProgress: surveyEntries.filter((entry) => entry.status === "조사중").length,
@@ -4510,7 +4601,6 @@ function InventorySurveyPage() {
     input: { title: "조사 재고 입력", description: "스캔/입력/업로드로 조사 재고를 수집하고 즉시 저장합니다." },
     compare: { title: "현재고 대조", description: "전산재고와 조사재고 차이를 확인하고 재고조정 연계까지 처리합니다." },
     history: { title: "작업내역", description: "조사 이력, 담당자, 상태를 날짜 기준으로 조회합니다." },
-    adjustment: { title: "재고 조정", description: "위치 선택 > 상품 선택 > 조정 요청의 순서로 정정 요청을 생성합니다." },
   };
   const activeGuide = tabGuide[activeTab] || tabGuide.lookup;
 
@@ -4519,8 +4609,8 @@ function InventorySurveyPage() {
       <div className="nw-survey-page">
         <div className="nw-page-head">
           <div>
-            <h2>재고조사 통합 메뉴</h2>
-            <p>재고 조회 / 조사 재고 입력 / 현재고 대조 / 작업내역 / 재고 조정을 한 화면에서 제공합니다.</p>
+            <h2>재고조사</h2>
+            <p>재고 조회 / 조사 재고 입력 / 현재고 대조 / 작업내역을 제공합니다. 재고조정은 별도 메뉴에서 진행합니다.</p>
           </div>
         </div>
 
@@ -4554,33 +4644,65 @@ function InventorySurveyPage() {
           <button type="button" className={activeTab === "input" ? "active" : ""} onClick={() => setActiveTab("input")}>조사 재고 입력</button>
           <button type="button" className={activeTab === "compare" ? "active" : ""} onClick={() => setActiveTab("compare")}>현재고 대조</button>
           <button type="button" className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}>작업내역</button>
-          <button type="button" className={activeTab === "adjustment" ? "active" : ""} onClick={() => setActiveTab("adjustment")}>재고 조정</button>
         </div>
 
         {activeTab === "lookup" ? <InventoryLookupTab onMoveToInput={() => setActiveTab("input")} /> : null}
         {activeTab === "input" ? <SurveyInputTab surveyEntries={surveyEntries} setSurveyEntries={setSurveyEntries} showToast={showToast} /> : null}
         {activeTab === "compare" ? <CurrentCompareTab surveyEntries={surveyEntries} setAdjustments={setAdjustments} showToast={showToast} /> : null}
         {activeTab === "history" ? <WorkHistoryTab surveyEntries={surveyEntries} /> : null}
+      </div>
 
-        {activeTab === "adjustment" ? (
-          <>
-            <section className="nw-panel nw-adjust-role-panel">
-              <div className="nw-panel-title-row">
-                <h3>재고 조정</h3>
-                <div className="nw-btn-row">
-                  <button type="button" className={`nw-btn tiny ${adjustmentRole === "worker" ? "active" : ""}`} onClick={() => setAdjustmentRole("worker")}>작업자 화면</button>
-                  <button type="button" className={`nw-btn tiny ${adjustmentRole === "admin" ? "active" : ""}`} onClick={() => setAdjustmentRole("admin")}>관리자 화면</button>
-                </div>
-              </div>
-            </section>
+      <GlobalToast message={toast} />
+    </SidebarLayout>
+  );
+}
 
-            {adjustmentRole === "worker" ? (
-              <WorkerAdjustmentPanel adjustments={adjustments} setAdjustments={setAdjustments} showToast={showToast} />
-            ) : (
-              <AdminAdjustmentPanel adjustments={adjustments} setAdjustments={setAdjustments} showToast={showToast} />
-            )}
-          </>
-        ) : null}
+function InventoryAdjustmentPage({ adjustments, setAdjustments }) {
+  const { toast, showToast } = useToast();
+
+  const adjustmentStats = useMemo(() => ({
+    total: adjustments.length,
+    pending: adjustments.filter((item) => item.status === "대기중").length,
+    approved: adjustments.filter((item) => item.status === "승인됨").length,
+    rejected: adjustments.filter((item) => item.status === "거절됨").length,
+  }), [adjustments]);
+
+  return (
+    <SidebarLayout title="재고조정">
+      <div className="nw-survey-page">
+        <div className="nw-page-head">
+          <div>
+            <h2>재고조정</h2>
+            <p>웹 운영자 화면에서 조정 요청을 검토하고 승인/반려를 처리합니다.</p>
+          </div>
+        </div>
+
+        <section className="nw-panel nw-survey-overview">
+          <div className="nw-survey-kpi-grid">
+            <article className="nw-survey-kpi">
+              <span>전체 요청</span>
+              <strong>{formatNumber(adjustmentStats.total)}</strong>
+            </article>
+            <article className="nw-survey-kpi">
+              <span>대기중</span>
+              <strong>{formatNumber(adjustmentStats.pending)}</strong>
+            </article>
+            <article className="nw-survey-kpi">
+              <span>승인됨</span>
+              <strong>{formatNumber(adjustmentStats.approved)}</strong>
+            </article>
+            <article className="nw-survey-kpi">
+              <span>거절됨</span>
+              <strong>{formatNumber(adjustmentStats.rejected)}</strong>
+            </article>
+          </div>
+          <div className="nw-survey-guide">
+            <strong>웹 관리자 화면</strong>
+            <span>요청 일괄 승인/반려 및 이력 검토</span>
+          </div>
+        </section>
+
+        <AdminAdjustmentPanel adjustments={adjustments} setAdjustments={setAdjustments} showToast={showToast} />
       </div>
 
       <GlobalToast message={toast} />
@@ -4589,13 +4711,29 @@ function InventorySurveyPage() {
 }
 
 function NewWmsApp() {
+  const [surveyEntries, setSurveyEntries] = useState(INITIAL_SURVEY_ENTRIES);
+  const [adjustments, setAdjustments] = useState(INITIAL_ADJUSTMENTS);
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/inventory-survey" element={<InventorySurveyPage />} />
+        <Route
+          path="/inventory-survey"
+          element={(
+            <InventorySurveyPage
+              surveyEntries={surveyEntries}
+              setSurveyEntries={setSurveyEntries}
+              adjustments={adjustments}
+              setAdjustments={setAdjustments}
+            />
+          )}
+        />
+        <Route
+          path="/inventory-adjustment"
+          element={<InventoryAdjustmentPage adjustments={adjustments} setAdjustments={setAdjustments} />}
+        />
         <Route path="/location-stock" element={<LocationStockPage />} />
         <Route path="/slow-moving" element={<SlowMovingPage />} />
-        <Route path="/slow-moving-2" element={<SlowMoving2Page />} />
         <Route path="/" element={<Navigate to="/inventory-survey" replace />} />
         <Route path="*" element={<Navigate to="/inventory-survey" replace />} />
       </Routes>
