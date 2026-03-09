@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BrowserRouter, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   ArcElement,
   BarElement,
@@ -926,17 +926,23 @@ function SidebarLayout({ title, children }) {
 
         <nav className="nw-nav">
           <div className="nw-nav-title">재고관리</div>
-          <NavLink to="/inventory-survey" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
+          <NavLink end to="/inventory-survey" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
             재고조사
           </NavLink>
-          <NavLink to="/inventory-adjustment" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
+          <NavLink end to="/inventory-adjustment" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
             재고조정
           </NavLink>
-          <NavLink to="/location-stock" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
+          <NavLink end to="/location-stock" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
             위치별 재고 현황
           </NavLink>
-          <NavLink to="/slow-moving" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
+          <NavLink end to="/location-stock/visual" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
+            위치별 재고 시각화
+          </NavLink>
+          <NavLink end to="/slow-moving" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
             부진재고
+          </NavLink>
+          <NavLink end to="/slow-moving/visual" className={({ isActive }) => `nw-nav-item ${isActive ? "active" : ""}`}>
+            부진재고 시각화
           </NavLink>
         </nav>
 
@@ -959,6 +965,31 @@ function SidebarLayout({ title, children }) {
 
 function GlobalToast({ message }) {
   return <div className={`nw-toast ${message ? "show" : ""}`}>{message}</div>;
+}
+
+function getSplitViewProps(pageKey, mode) {
+  const isVisual = mode === "visual";
+  if (pageKey === "slow-moving") {
+    return {
+      menuTitle: isVisual ? "부진재고 시각화" : "부진재고",
+      pageTitle: isVisual ? "부진재고 시각화" : "부진재고",
+      pageDescription: isVisual
+        ? "부진재고 시각화 화면을 별도 링크로 분리해 바로 접근할 수 있습니다."
+        : "부진재고 리스트 화면입니다. 시각화는 별도 링크에서 확인합니다.",
+      listPath: "/slow-moving",
+      visualPath: "/slow-moving/visual",
+    };
+  }
+
+  return {
+    menuTitle: isVisual ? "위치별 재고 시각화" : "위치별 재고 현황",
+    pageTitle: isVisual ? "위치별 재고 시각화" : "위치별 재고 현황",
+    pageDescription: isVisual
+      ? "위치별 재고 시각화 화면을 별도 링크로 분리해 바로 접근할 수 있습니다."
+      : "위치별 재고 리스트 화면입니다. 시각화는 별도 링크에서 확인합니다.",
+    listPath: "/location-stock",
+    visualPath: "/location-stock/visual",
+  };
 }
 
 function ChartPanel({ title, helper = "", className = "", children }) {
@@ -986,8 +1017,12 @@ function SlowMovingBasePage({
   pageTitle = "부진재고",
   pageDescription = "SKU 단위 필터 + 위치 단위 출력, 대시보드/리스트 전환",
   visualVariant = "v1",
+  mode = "list",
+  listPath = "/slow-moving",
+  visualPath = "/slow-moving/visual",
 } = {}) {
   const { toast, showToast } = useToast();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState({
     owner: "ALL",
     center: "A센터",
@@ -999,12 +1034,12 @@ function SlowMovingBasePage({
     brand: "ALL",
     query: "",
   });
-  const [viewMode, setViewMode] = useState("list");
   const [selectedSkuId, setSelectedSkuId] = useState("sku-001");
   const [selectedLocationCode, setSelectedLocationCode] = useState("");
   const [routeSourceCode, setRouteSourceCode] = useState("");
   const [routeTargetCode, setRouteTargetCode] = useState("");
   const [weightMode, setWeightMode] = useState("qty_high");
+  const viewMode = mode;
 
   const filteredSkus = useMemo(
     () => SLOW_MOVING_SKUS.filter((sku) => {
@@ -2111,7 +2146,6 @@ function SlowMovingBasePage({
       brand: "ALL",
       query: "",
     });
-    setViewMode("list");
     setSelectedLocationCode("");
     setRouteSourceCode("");
     setRouteTargetCode("");
@@ -2140,8 +2174,8 @@ function SlowMovingBasePage({
             placeholder="상품명, 바코드, 위치 코드"
           />
           <button type="button" className="nw-btn primary" onClick={() => showToast(`스캔 결과 ${formatNumber(filteredRows.length)}건`)}>스캔</button>
-          <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="목록 보기">☷</button>
-          <button type="button" className={`nw-icon-btn ${viewMode === "visual" ? "active" : ""}`} onClick={() => setViewMode("visual")} title="시각화 보기">⊞</button>
+          <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => navigate(listPath)} title="목록 보기">☷</button>
+          <button type="button" className={`nw-icon-btn ${viewMode === "visual" ? "active" : ""}`} onClick={() => navigate(visualPath)} title="시각화 보기">⊞</button>
         </div>
 
         <div className="nw-filter-grid slow">
@@ -2403,12 +2437,15 @@ function SlowMovingBasePage({
   );
 }
 
-function SlowMovingPage() {
-  return <SlowMovingBasePage />;
+function SlowMovingPage({ mode = "list" }) {
+  const props = getSplitViewProps("slow-moving", mode);
+  return <SlowMovingBasePage {...props} mode={mode} />;
 }
 
-function LocationStockPage() {
+function LocationStockPage({ mode = "list" }) {
   const { toast, showToast } = useToast();
+  const navigate = useNavigate();
+  const pageProps = getSplitViewProps("location-stock", mode);
   const [filters, setFilters] = useState({
     owner: "ALL",
     zone: "ALL",
@@ -2421,11 +2458,11 @@ function LocationStockPage() {
     minUtil: "",
     maxUtil: "",
   });
-  const [viewMode, setViewMode] = useState("list");
   const [sortType, setSortType] = useState("기본");
   const [focusLocationId, setFocusLocationId] = useState("");
   const [selectedRowIds, setSelectedRowIds] = useState(() => new Set());
   const selectAllRef = useRef(null);
+  const viewMode = mode;
 
   const sourceRows = useMemo(
     () =>
@@ -2613,7 +2650,6 @@ function LocationStockPage() {
     }));
     setSelectedRowIds(new Set([matched.id]));
     setFocusLocationId(matched.id);
-    setViewMode("list");
     showToast(`스캔 완료: ${matched.locationCode}`);
   };
 
@@ -2630,18 +2666,17 @@ function LocationStockPage() {
       minUtil: "",
       maxUtil: "",
     });
-    setViewMode("list");
     setSortType("기본");
     setSelectedRowIds(new Set());
     showToast("필터를 초기화했습니다.");
   };
 
   return (
-    <SidebarLayout title="위치별 재고 현황">
+    <SidebarLayout title={pageProps.menuTitle}>
       <div className="nw-page-head">
         <div>
-          <h2>위치별 재고 현황</h2>
-          <p>필터 조건으로 위치별 재고를 조회하고 리스트/시각화 화면을 전환해서 확인합니다.</p>
+          <h2>{pageProps.pageTitle}</h2>
+          <p>{pageProps.pageDescription}</p>
         </div>
       </div>
 
@@ -2674,10 +2709,10 @@ function LocationStockPage() {
           <button type="button" className="nw-btn primary" onClick={handleLocationScan}>
             스캔
           </button>
-          <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="리스트 보기">
+          <button type="button" className={`nw-icon-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => navigate(pageProps.listPath)} title="리스트 보기">
             ≡
           </button>
-          <button type="button" className={`nw-icon-btn ${viewMode === "visual" ? "active" : ""}`} onClick={() => setViewMode("visual")} title="시각화 보기">
+          <button type="button" className={`nw-icon-btn ${viewMode === "visual" ? "active" : ""}`} onClick={() => navigate(pageProps.visualPath)} title="시각화 보기">
             ⊞
           </button>
         </div>
@@ -5368,8 +5403,10 @@ function NewWmsApp() {
           path="/inventory-adjustment"
           element={<InventoryAdjustmentPage adjustments={adjustments} setAdjustments={setAdjustments} />}
         />
-        <Route path="/location-stock" element={<LocationStockPage />} />
-        <Route path="/slow-moving" element={<SlowMovingPage />} />
+        <Route path="/location-stock" element={<LocationStockPage mode="list" />} />
+        <Route path="/location-stock/visual" element={<LocationStockPage mode="visual" />} />
+        <Route path="/slow-moving" element={<SlowMovingPage mode="list" />} />
+        <Route path="/slow-moving/visual" element={<SlowMovingPage mode="visual" />} />
         <Route path="/" element={<Navigate to="/inventory-survey" replace />} />
         <Route path="*" element={<Navigate to="/inventory-survey" replace />} />
       </Routes>
