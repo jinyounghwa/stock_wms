@@ -2904,6 +2904,328 @@
   gap: 8px;
 }
 
+.nw-lookup-list-wrap {
+  border: 1px solid var(--nw-line);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.nw-lookup-head-row {
+  display: grid;
+  grid-template-columns: 44px minmax(360px, 1fr) 130px 160px 170px;
+  align-items: center;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--nw-line);
+  background: #fbfcff;
+  color: #2d3a4f;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.nw-lookup-head-row .check,
+.nw-lookup-item-row .check {
+  display: flex;
+  justify-content: center;
+}
+
+.nw-lookup-list {
+  display: grid;
+}
+
+.nw-lookup-item {
+  border-bottom: 1px solid #edf1f6;
+  background: #fff;
+}
+
+.nw-lookup-item:last-child {
+  border-bottom: 0;
+}
+
+.nw-lookup-item.selected {
+  background: #f9fcff;
+}
+
+.nw-lookup-item-row {
+  display: grid;
+  grid-template-columns: 44px minmax(360px, 1fr) 130px 160px 170px;
+  gap: 0;
+  align-items: center;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.nw-lookup-item-row .product-info {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.nw-lookup-item-row .product-info .nw-thumb {
+  width: 70px;
+  height: 70px;
+  border-radius: 8px;
+}
+
+.nw-lookup-item-row .meta .code-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nw-lookup-item-row .meta .code-line strong {
+  font-size: 20px;
+  color: #2a3448;
+  line-height: 1;
+}
+
+.nw-lookup-item-row .meta .name {
+  margin-top: 8px;
+  font-size: 16px;
+  color: #1f2c43;
+  line-height: 1.12;
+}
+
+.nw-lookup-item-row .meta .toggle-option-btn {
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  color: #5d6f87;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+
+.nw-lookup-item-row .brand {
+  font-size: 16px;
+  color: #2b3448;
+  font-weight: 500;
+}
+
+.nw-lookup-item-row .maker-info {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.nw-lookup-item-row .maker-info strong {
+  color: #6d84a4;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.nw-lookup-item-row .maker-info span {
+  color: #a0adbe;
+  font-size: 13px;
+}
+
+.nw-lookup-item-row .stock {
+  display: grid;
+  gap: 10px;
+}
+
+.nw-lookup-item-row .stock div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #8897ab;
+  font-size: 14px;
+}
+
+.nw-lookup-item-row .stock strong {
+  color: #2a3448;
+  font-size: 15px;
+}
+
+.nw-lookup-option-wrap {
+  padding: 0 12px 12px 56px;
+}
+
+.nw-lookup-option-table td,
+.nw-lookup-option-table th {
+  white-space: nowrap;
+}
+
+.nw-lookup-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 22, 32, 0.36);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.nw-lookup-modal {
+  width: min(1180px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #d9e2ef;
+  background: #fff;
+  padding: 22px 30px 26px;
+}
+
+.nw-lookup-modal-body {
+  margin-top: 8px;
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.nw-lookup-modal-title {
+  color: #202d41;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.nw-lookup-modal-hero {
+  margin-top: 12px;
+  border-top: 1px solid #e7edf5;
+  border-bottom: 1px solid #e7edf5;
+  padding: 18px 12px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.nw-lookup-modal-hero .nw-thumb {
+  width: 110px;
+  height: 110px;
+  border-radius: 10px;
+}
+
+.nw-lookup-modal-hero strong {
+  color: #1d2a40;
+  font-size: 36px;
+  line-height: 1.2;
+}
+
+.nw-lookup-modal-section {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid #e7edf5;
+}
+
+.nw-lookup-modal-section h4 {
+  margin: 0 0 12px;
+  color: #32445e;
+  font-size: 15px;
+}
+
+.nw-lookup-info-grid {
+  display: grid;
+  grid-template-columns: 150px 1fr 150px 1fr 150px 1fr;
+  gap: 8px;
+}
+
+.nw-lookup-info-grid .label,
+.nw-lookup-info-grid .value {
+  min-height: 34px;
+  border: 1px solid #dde5f1;
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.nw-lookup-info-grid .label {
+  justify-content: center;
+  background: #f6f8fc;
+  color: #5e7089;
+  font-weight: 600;
+}
+
+.nw-lookup-info-grid .value {
+  background: #fff;
+  color: #2b3850;
+}
+
+.nw-lookup-modal-table-wrap {
+  border: 1px solid #dfe7f3;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.nw-lookup-modal-table-wrap .nw-table {
+  min-width: 640px;
+}
+
+@media (max-width: 900px) {
+  .nw-lookup-modal {
+    padding: 16px;
+  }
+
+  .nw-lookup-modal-hero strong {
+    font-size: 18px;
+  }
+
+  .nw-lookup-info-grid {
+    grid-template-columns: 110px 1fr;
+  }
+}
+
+@media (max-width: 1200px) {
+  .nw-lookup-head-row,
+  .nw-lookup-item-row {
+    grid-template-columns: 36px minmax(260px, 1fr) 110px 130px 140px;
+  }
+
+  .nw-lookup-item-row .meta .code-line strong {
+    font-size: 18px;
+  }
+
+  .nw-lookup-item-row .meta .name {
+    font-size: 16px;
+  }
+
+  .nw-lookup-item-row .brand {
+    font-size: 16px;
+  }
+
+  .nw-lookup-item-row .maker-info strong {
+    font-size: 16px;
+  }
+
+  .nw-lookup-item-row .maker-info span {
+    font-size: 13px;
+  }
+
+  .nw-lookup-item-row .stock strong {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 900px) {
+  .nw-lookup-head-row {
+    display: none;
+  }
+
+  .nw-lookup-item-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+    row-gap: 12px;
+  }
+
+  .nw-lookup-item-row .brand,
+  .nw-lookup-item-row .maker-info,
+  .nw-lookup-item-row .stock {
+    grid-column: 2;
+  }
+
+  .nw-lookup-item-row .stock {
+    border-top: 1px dashed #e6ecf3;
+    padding-top: 8px;
+  }
+
+  .nw-lookup-option-wrap {
+    padding: 0 8px 8px 8px;
+  }
+}
+
 .nw-mobile-card {
   border: 1px solid var(--nw-line);
   border-radius: 10px;
@@ -3076,6 +3398,18 @@
   font-size: 12px;
   cursor: pointer;
   margin-top: 6px;
+}
+
+.nw-copy-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nw-copy-btn {
+  margin-top: 0;
+  padding: 0;
+  line-height: 1;
 }
 
 .nw-mobile-section {

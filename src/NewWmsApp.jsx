@@ -32,6 +32,10 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString("ko-KR");
 }
 
+function formatCurrency(value) {
+  return `W${formatNumber(value)}`;
+}
+
 function toNumber(value) {
   const parsed = Number(String(value ?? "").replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -45,6 +49,34 @@ function getNowString() {
   const hh = String(now.getHours()).padStart(2, "0");
   const min = String(now.getMinutes()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+}
+
+async function copyToClipboard(text) {
+  if (!text) return false;
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (error) {
+    // Fallback below for environments where clipboard API is blocked.
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return copied;
+  } catch (error) {
+    return false;
+  }
 }
 
 function useToast() {
@@ -65,6 +97,13 @@ function useToast() {
   );
 
   return { toast, showToast };
+}
+
+function findProductCodeByBarcode(barcode = "") {
+  const normalized = normalizeLookupValue(barcode);
+  if (!normalized) return "";
+  const matched = PRODUCT_MASTER.find((product) => product.barcode === normalized);
+  return matched ? matched.id.toUpperCase() : "";
 }
 
 const OWNER_OPTIONS = ["ALL", "화주사 2", "안나엔모드", "onedns_test", "원차일드", "테스트"];
@@ -3020,19 +3059,62 @@ function LocationStockPage() {
     </SidebarLayout>
   );
 }
-function InventoryLookupTab({ onMoveToInput }) {
+function InventoryLookupTab({ onMoveToInput, showToast }) {
   const [owner, setOwner] = useState("");
   const [query, setQuery] = useState("");
   const [expandedSet, setExpandedSet] = useState(() => new Set());
+  const [selectedSet, setSelectedSet] = useState(() => new Set());
+  const [detailProductId, setDetailProductId] = useState("");
 
   const filteredProducts = useMemo(() => {
-    if (!owner && !query.trim()) return [];
     const keyword = query.trim().toLowerCase();
     return PRODUCT_MASTER.filter((product) => {
-      const target = `${product.name} ${product.option} ${product.barcode} ${product.brand} ${product.locations.map((location) => location.code).join(" ")}`.toLowerCase();
+      const target = `${product.id} ${product.name} ${product.option} ${product.barcode} ${product.brand} ${product.locations.map((location) => location.code).join(" ")}`.toLowerCase();
       return (!owner || product.owner === owner) && (!keyword || target.includes(keyword));
     });
   }, [owner, query]);
+
+  const allSelected = filteredProducts.length > 0 && filteredProducts.every((item) => selectedSet.has(item.id));
+  const detailProduct = PRODUCT_MASTER.find((item) => item.id === detailProductId) || null;
+  const detailStockRows = useMemo(() => {
+    if (!detailProduct) return [];
+
+    return detailProduct.locations.map((location) => {
+      const locationRow = LOCATION_STOCK_ROWS.find((row) => row.locationCode === location.code);
+      const matchedProduct = locationRow?.products?.find((item) => item.barcode === detailProduct.barcode);
+      const stock = matchedProduct ? toNumber(matchedProduct.stock) : toNumber(location.qty);
+      const available = matchedProduct ? toNumber(matchedProduct.available) : toNumber(location.qty);
+      const reserved = matchedProduct ? toNumber(matchedProduct.reserved) : Math.max(stock - available, 0);
+      return {
+        center: locationRow?.center || "-",
+        zone: location.zone || locationRow?.zone || "-",
+        locationCode: location.code,
+        stock,
+        available,
+        reserved,
+      };
+    });
+  }, [detailProduct]);
+
+  const detailSlowSku = useMemo(() => {
+    if (!detailProduct) return null;
+    return SLOW_MOVING_SKUS.find((sku) => sku.locations.some((location) => location.barcode === detailProduct.barcode)) || null;
+  }, [detailProduct]);
+
+  const detailTotals = useMemo(() => {
+    const stock = detailStockRows.reduce((sum, row) => sum + row.stock, 0);
+    const available = detailStockRows.reduce((sum, row) => sum + row.available, 0);
+    const reserved = detailStockRows.reduce((sum, row) => sum + row.reserved, 0);
+    return {
+      stock,
+      available,
+      reserved,
+      pendingShipment: reserved,
+      defective: 0,
+      inspection: 0,
+      putaway: 0,
+    };
+  }, [detailStockRows]);
 
   const toggleExpand = (id) => {
     setExpandedSet((prev) => {
@@ -3042,6 +3124,31 @@ function InventoryLookupTab({ onMoveToInput }) {
       return next;
     });
   };
+
+  const toggleSelect = (id) => {
+    setSelectedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked) => {
+    if (!checked) {
+      setSelectedSet(new Set());
+      return;
+    }
+    setSelectedSet(new Set(filteredProducts.map((item) => item.id)));
+  };
+
+  const copyCode = async (productCode) => {
+    const copied = await copyToClipboard(productCode);
+    showToast(copied ? "상품코드가 복사되었습니다." : "상품코드 복사에 실패했습니다.");
+  };
+
+  const openDetail = (productId) => setDetailProductId(productId);
+  const closeDetail = () => setDetailProductId("");
 
   return (
     <>
@@ -3055,7 +3162,7 @@ function InventoryLookupTab({ onMoveToInput }) {
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="바코드 스캔 또는 검색어 입력"
+            placeholder="상품명, 상품코드, 바코드, 로케이션 검색"
           />
         </div>
       </section>
@@ -3063,64 +3170,219 @@ function InventoryLookupTab({ onMoveToInput }) {
       {!filteredProducts.length ? (
         <section className="nw-mobile-empty">
           <div className="icon">⌘</div>
-          <p>바코드를 스캔하거나 검색어를 입력해 주세요</p>
+          <p>조회 조건에 맞는 상품이 없습니다.</p>
         </section>
       ) : (
-        <section className="nw-mobile-list">
-          {filteredProducts.map((product) => {
-            const expanded = expandedSet.has(product.id);
-            const visibleLocations = expanded ? product.locations : product.locations.slice(0, 2);
-            const totalQty = product.locations.reduce((sum, location) => sum + location.qty, 0);
-            return (
-              <article key={product.id} className="nw-mobile-card">
-                <div className="nw-mobile-product-head">
-                  <div className={`nw-thumb ${getToneClass(product.tone)}`} />
-                  <div>
-                    <strong>{product.name}</strong>
-                    <span>{product.option}</span>
-                    <span>{product.barcode}</span>
-                    <span className="brand">{product.brand}</span>
-                  </div>
-                  <div className="qty">
-                    <span>{formatNumber(totalQty)}</span>
-                    <small>📍 {product.locations.length}</small>
-                  </div>
-                </div>
+        <section className="nw-lookup-list-wrap">
+          <div className="nw-lookup-head-row">
+            <div className="check">
+              <input type="checkbox" checked={allSelected} onChange={(event) => toggleSelectAll(event.target.checked)} />
+            </div>
+            <div>상품정보</div>
+            <div>브랜드</div>
+            <div>제작 정보</div>
+            <div>재고</div>
+          </div>
 
-                <div className="nw-location-lines">
-                  {visibleLocations.map((location) => (
-                    <div key={`${product.id}-${location.code}`} className="line">
-                      <span className="zone">{location.zone}</span>
-                      <strong>{location.code}</strong>
-                      <em>{formatNumber(location.qty)}개</em>
+          <div className="nw-lookup-list">
+            {filteredProducts.map((product) => {
+              const expanded = expandedSet.has(product.id);
+              const selected = selectedSet.has(product.id);
+              const totalQty = product.locations.reduce((sum, location) => sum + location.qty, 0);
+              const availableQty = totalQty;
+              const safeQty = 0;
+              const productCode = product.id.toUpperCase();
+              return (
+                <article key={product.id} className={`nw-lookup-item ${selected ? "selected" : ""}`}>
+                  <div className="nw-lookup-item-row" onClick={() => openDetail(product.id)}>
+                    <div className="check">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={() => toggleSelect(product.id)}
+                      />
                     </div>
-                  ))}
-                </div>
+                    <div className="product-info">
+                      <div className={`nw-thumb ${getToneClass(product.tone)}`} />
+                      <div className="meta">
+                        <div className="code-line">
+                          <strong>{productCode}</strong>
+                          <button
+                            type="button"
+                            className="nw-link-btn nw-copy-btn"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              copyCode(productCode);
+                            }}
+                          >
+                            복사
+                          </button>
+                        </div>
+                        <div className="name">{product.name}</div>
+                        <button
+                          type="button"
+                          className="toggle-option-btn"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleExpand(product.id);
+                          }}
+                        >
+                          {expanded ? "옵션 접기 ^" : "옵션 펼치기 v"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="brand">{product.brand}</div>
+                    <div className="maker-info">
+                      <strong>-</strong>
+                      <span>Supplied</span>
+                    </div>
+                    <div className="stock">
+                      <div><span>총 재고</span><strong>{formatNumber(totalQty)}개</strong></div>
+                      <div><span>가용 재고</span><strong>{formatNumber(availableQty)}개</strong></div>
+                      <div><span>안전 재고</span><strong>{formatNumber(safeQty)}개</strong></div>
+                    </div>
+                  </div>
 
-                {product.locations.length > 2 ? (
-                  <button type="button" className="nw-link-btn" onClick={() => toggleExpand(product.id)}>
-                    {expanded ? "접기" : `로케이션 ${product.locations.length - 2}개 더 보기`}
-                  </button>
-                ) : null}
+                  {expanded ? (
+                    <div className="nw-lookup-option-wrap">
+                      <table className="nw-table nw-lookup-option-table">
+                        <thead>
+                          <tr>
+                            <th className="check"><input type="checkbox" /></th>
+                            <th>옵션명</th>
+                            <th>수량 (가용 재고)</th>
+                            <th>로케이션</th>
+                            <th>글로벌 바코드</th>
+                            <th>원가</th>
+                            <th>재고 금액</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {product.locations.map((location, index) => (
+                            <tr key={`${product.id}-${location.code}`}>
+                              <td className="check"><input type="checkbox" /></td>
+                              <td>{product.option}</td>
+                              <td>{formatNumber(location.qty)}개 ({formatNumber(location.qty)}개)</td>
+                              <td>{location.code}</td>
+                              <td>{product.barcode}</td>
+                              <td>{formatCurrency(0)}</td>
+                              <td>{formatCurrency(0)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
 
-                <div className="nw-btn-row end">
-                  <button type="button" className="nw-btn tiny" onClick={onMoveToInput}>조사 재고 입력 이동</button>
-                </div>
-              </article>
-            );
-          })}
+          <div className="nw-btn-row end">
+            <button type="button" className="nw-btn tiny" onClick={onMoveToInput}>조사 재고 입력 이동</button>
+          </div>
         </section>
       )}
+
+      {detailProduct ? (
+        <div className="nw-lookup-modal-overlay" onClick={closeDetail}>
+          <div className="nw-lookup-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="nw-lookup-modal-title">{detailProduct.option}</div>
+
+            <div className="nw-lookup-modal-body">
+              <section className="nw-lookup-modal-hero">
+                <div className={`nw-thumb ${getToneClass(detailProduct.tone)}`} />
+                <strong>{detailProduct.option}</strong>
+              </section>
+
+              <section className="nw-lookup-modal-section">
+                <h4>기본 정보</h4>
+                <div className="nw-lookup-info-grid">
+                  <div className="label">*공급처 정보</div><div className="value">{detailProduct.owner}</div>
+                  <div className="label">상품명</div><div className="value">{detailProduct.name}</div>
+                  <div className="label">옵션명</div><div className="value">{detailProduct.option}</div>
+                  <div className="label">품목 코드</div><div className="value">{detailProduct.id.toUpperCase()}</div>
+                  <div className="label">상품 속성</div><div className="value">{detailProduct.option.includes(",") ? "옵션상품" : "단일상품"}</div>
+                  <div className="label">카테고리</div><div className="value">{`C${String(detailProduct.id.replace(/\D/g, "") || "1").padStart(7, "0")}`}</div>
+                  <div className="label">상품 태그</div><div className="value">{`${detailProduct.owner}/${detailProduct.brand}`}</div>
+                  <div className="label">브랜드</div><div className="value">{detailProduct.brand}</div>
+                  <div className="label">연도/시즌</div><div className="value">{detailSlowSku?.season || "연중"}</div>
+                </div>
+              </section>
+
+              <section className="nw-lookup-modal-section">
+                <h4>재고 정보 | 총 재고 {formatNumber(detailTotals.stock)}</h4>
+                <div className="nw-lookup-info-grid stock">
+                  <div className="label">가용 재고</div><div className="value">{formatNumber(detailTotals.available)}</div>
+                  <div className="label">미발송 재고</div><div className="value">{formatNumber(detailTotals.pendingShipment)}</div>
+                  <div className="label">예약 재고</div><div className="value">{formatNumber(detailTotals.reserved)}</div>
+                  <div className="label">불량 재고</div><div className="value">{formatNumber(detailTotals.defective)}</div>
+                  <div className="label">검수 대기 재고</div><div className="value">{formatNumber(detailTotals.inspection)}</div>
+                  <div className="label">적치 대기 재고</div><div className="value">{formatNumber(detailTotals.putaway)}</div>
+                </div>
+              </section>
+
+              <section className="nw-lookup-modal-section">
+                <h4>로케이션별 재고</h4>
+                <div className="nw-lookup-modal-table-wrap">
+                  <table className="nw-table compact">
+                    <thead>
+                      <tr>
+                        <th>센터</th>
+                        <th>존</th>
+                        <th>로케이션</th>
+                        <th>총 재고</th>
+                        <th>가용</th>
+                        <th>미발송</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailStockRows.map((row) => (
+                        <tr key={`${detailProduct.id}-${row.locationCode}`}>
+                          <td>{row.center}</td>
+                          <td>{row.zone}</td>
+                          <td>{row.locationCode}</td>
+                          <td>{formatNumber(row.stock)}</td>
+                          <td>{formatNumber(row.available)}</td>
+                          <td>{formatNumber(row.reserved)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="nw-lookup-modal-section">
+                <h4>공급정보</h4>
+                <div className="nw-lookup-info-grid">
+                  <div className="label">화주사</div><div className="value">{detailProduct.owner}</div>
+                  <div className="label">공급처명</div><div className="value">{detailProduct.brand}</div>
+                  <div className="label">공급처 코드</div><div className="value">{`SUP-${detailProduct.id.toUpperCase()}`}</div>
+                  <div className="label">공급 유형</div><div className="value">Supplied</div>
+                  <div className="label">입고 센터</div><div className="value">{[...new Set(detailStockRows.map((row) => row.center))].filter(Boolean).join(", ") || "-"}</div>
+                  <div className="label">최근 입고일</div><div className="value">{detailSlowSku?.lastInboundDate || "-"}</div>
+                </div>
+              </section>
+            </div>
+
+            <div className="nw-btn-row end">
+              <button type="button" className="nw-btn primary" onClick={closeDetail}>확인</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
 
-function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
+function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast, onCopyProductCode }) {
   const [subTab, setSubTab] = useState("individual");
   const [individualForm, setIndividualForm] = useState({
     owner: "화주사 2",
     round: "2026-03-1차",
     barcode: "",
+    option: "",
     locationCode: "",
     qty: "",
     memo: "",
@@ -3130,6 +3392,7 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
     locationCode: "WHO1-A01-01-01",
     mode: "자동누산",
     barcode: "",
+    option: "",
     qty: "1",
   });
   const [uploadText, setUploadText] = useState("880123456789,WHO1-A01-01-01,3,정상\n880987654321,WHO1-B02-01-01,2,리스트등록");
@@ -3138,6 +3401,8 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [individualResult, setIndividualResult] = useState(null);
   const [scanResult, setScanResult] = useState(null);
+  const [individualExpanded, setIndividualExpanded] = useState(false);
+  const [scanExpanded, setScanExpanded] = useState(false);
 
   const findProductByLocationCode = (locationCode, owner = "") => {
     const normalizedLocationCode = normalizeLookupValue(locationCode).toLowerCase();
@@ -3174,10 +3439,11 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
     return { barcode: normalizedBarcode, locationCode: normalizedLocationCode, owner, product };
   };
 
-  const createEntry = ({ owner, round, barcode, locationCode, qty, memo, source }) => {
+  const createEntry = ({ owner, round, barcode, option, locationCode, qty, memo, source }) => {
     const normalizedBarcode = normalizeLookupValue(barcode);
     const normalizedLocationCode = normalizeLookupValue(locationCode);
     const product = resolveInputProduct({ barcode: normalizedBarcode, locationCode: normalizedLocationCode, owner });
+    const normalizedOption = normalizeLookupValue(option);
     return {
       id: `survey-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       owner,
@@ -3191,7 +3457,7 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
       worker: "김작업",
       createdAt: getNowString(),
       productName: product ? product.name : "미등록 상품",
-      option: product ? product.option : "-",
+      option: normalizedOption || (product ? product.option : "-"),
     };
   };
 
@@ -3210,7 +3476,8 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
       }),
     );
     setSurveyEntries((prev) => [createEntry({ ...individualForm, barcode: normalizedBarcode, source: "개별입력" }), ...prev]);
-    setIndividualForm((prev) => ({ ...prev, barcode: "", locationCode: "", qty: "", memo: "" }));
+    setIndividualExpanded(false);
+    setIndividualForm((prev) => ({ ...prev, barcode: "", option: "", locationCode: "", qty: "", memo: "" }));
     showToast("조사 재고를 임시 목록에 추가했습니다.");
   };
 
@@ -3243,6 +3510,7 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
             owner: scanForm.owner,
             round: "2026-03-1차",
             barcode: normalizedBarcode,
+            option: scanForm.option,
             locationCode: scanForm.locationCode,
             qty: 1,
             memo: "",
@@ -3261,6 +3529,7 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
           owner: scanForm.owner,
           round: "2026-03-1차",
           barcode: normalizedBarcode,
+          option: scanForm.option,
           locationCode: scanForm.locationCode,
           qty: toNumber(scanForm.qty),
           memo: "",
@@ -3270,6 +3539,7 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
       ]);
     }
 
+    setScanExpanded(false);
     setScanForm((prev) => ({ ...prev, barcode: "" }));
     showToast("스캔 항목을 반영했습니다.");
   };
@@ -3382,6 +3652,14 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
               />
             </label>
             <label>
+              옵션명
+              <input
+                value={individualForm.option}
+                onChange={(event) => setIndividualForm((prev) => ({ ...prev, option: event.target.value }))}
+                placeholder="예: 화이트,L"
+              />
+            </label>
+            <label>
               로케이션
               <input value={individualForm.locationCode} onChange={(event) => setIndividualForm((prev) => ({ ...prev, locationCode: event.target.value }))} />
             </label>
@@ -3403,21 +3681,73 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
                 <h4>입력 상품</h4>
               </div>
               {individualResult.product ? (
-                <article className="nw-mobile-card compact nw-survey-input-preview">
-                  <div className="nw-mobile-product-head">
-                    <div className={`nw-thumb ${getToneClass(individualResult.product.tone)}`} />
-                    <div>
-                      <strong>{individualResult.product.name}</strong>
-                      <span>{individualResult.product.option}</span>
-                      <span>{individualResult.product.barcode}</span>
-                      <span className="brand">{individualResult.product.brand}</span>
-                      <span className="nw-product-tag">{individualResult.product.owner}</span>
-                    </div>
-                    <div className="qty">
-                      <span>{formatNumber(individualResult.product.locations.reduce((sum, location) => sum + location.qty, 0))}개</span>
-                    </div>
+                <div className="nw-lookup-list-wrap nw-survey-result-list">
+                  <div className="nw-lookup-head-row">
+                    <div className="check"><input type="checkbox" /></div>
+                    <div>상품정보</div>
+                    <div>브랜드</div>
+                    <div>제작 정보</div>
+                    <div>재고</div>
                   </div>
-                </article>
+                  <article className="nw-lookup-item">
+                    <div className="nw-lookup-item-row">
+                      <div className="check"><input type="checkbox" /></div>
+                      <div className="product-info">
+                        <div className={`nw-thumb ${getToneClass(individualResult.product.tone)}`} />
+                        <div className="meta">
+                          <div className="code-line">
+                            <strong>{individualResult.product.id.toUpperCase()}</strong>
+                            <button type="button" className="nw-link-btn nw-copy-btn" onClick={() => onCopyProductCode(individualResult.product.id.toUpperCase())}>복사</button>
+                          </div>
+                          <div className="name">{individualResult.product.name}</div>
+                          <button type="button" className="toggle-option-btn" onClick={() => setIndividualExpanded((prev) => !prev)}>
+                            {individualExpanded ? "옵션 접기 ^" : "옵션 펼치기 v"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="brand">{individualResult.product.brand}</div>
+                      <div className="maker-info">
+                        <strong>-</strong>
+                        <span>Supplied</span>
+                      </div>
+                      <div className="stock">
+                        <div><span>총 재고</span><strong>{formatNumber(individualResult.product.locations.reduce((sum, location) => sum + location.qty, 0))}개</strong></div>
+                        <div><span>가용 재고</span><strong>{formatNumber(individualResult.product.locations.reduce((sum, location) => sum + location.qty, 0))}개</strong></div>
+                        <div><span>안전 재고</span><strong>0개</strong></div>
+                      </div>
+                    </div>
+                    {individualExpanded ? (
+                      <div className="nw-lookup-option-wrap">
+                        <table className="nw-table nw-lookup-option-table">
+                          <thead>
+                            <tr>
+                              <th className="check"><input type="checkbox" /></th>
+                              <th>옵션명</th>
+                              <th>수량 (가용 재고)</th>
+                              <th>로케이션</th>
+                              <th>글로벌 바코드</th>
+                              <th>원가</th>
+                              <th>재고 금액</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {individualResult.product.locations.map((location) => (
+                              <tr key={`${individualResult.product.id}-${location.code}`}>
+                                <td className="check"><input type="checkbox" /></td>
+                                <td>{individualResult.product.option}</td>
+                                <td>{formatNumber(location.qty)}개 ({formatNumber(location.qty)}개)</td>
+                                <td>{location.code}</td>
+                                <td>{individualResult.product.barcode}</td>
+                                <td>{formatCurrency(0)}</td>
+                                <td>{formatCurrency(0)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </article>
+                </div>
               ) : (
                 <div className="nw-mobile-empty compact nw-survey-input-empty">
                   <strong>입력한 값과 일치하는 상품이 없습니다.</strong>
@@ -3463,6 +3793,14 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
                 placeholder="스캔값 입력"
               />
             </label>
+            <label>
+              옵션명
+              <input
+                value={scanForm.option}
+                onChange={(event) => setScanForm((prev) => ({ ...prev, option: event.target.value }))}
+                placeholder="예: 화이트,L"
+              />
+            </label>
             {scanForm.mode === "단위입력" ? (
               <label>
                 수량
@@ -3479,21 +3817,73 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
                 <h4>스캔 상품</h4>
               </div>
               {scanResult.product ? (
-                <article className="nw-mobile-card compact nw-survey-input-preview">
-                  <div className="nw-mobile-product-head">
-                    <div className={`nw-thumb ${getToneClass(scanResult.product.tone)}`} />
-                    <div>
-                      <strong>{scanResult.product.name}</strong>
-                      <span>{scanResult.product.option}</span>
-                      <span>{scanResult.product.barcode}</span>
-                      <span className="brand">{scanResult.product.brand}</span>
-                      <span className="nw-product-tag">{scanResult.product.owner}</span>
-                    </div>
-                    <div className="qty">
-                      <span>{formatNumber(scanResult.product.locations.reduce((sum, location) => sum + location.qty, 0))}개</span>
-                    </div>
+                <div className="nw-lookup-list-wrap nw-survey-result-list">
+                  <div className="nw-lookup-head-row">
+                    <div className="check"><input type="checkbox" /></div>
+                    <div>상품정보</div>
+                    <div>브랜드</div>
+                    <div>제작 정보</div>
+                    <div>재고</div>
                   </div>
-                </article>
+                  <article className="nw-lookup-item">
+                    <div className="nw-lookup-item-row">
+                      <div className="check"><input type="checkbox" /></div>
+                      <div className="product-info">
+                        <div className={`nw-thumb ${getToneClass(scanResult.product.tone)}`} />
+                        <div className="meta">
+                          <div className="code-line">
+                            <strong>{scanResult.product.id.toUpperCase()}</strong>
+                            <button type="button" className="nw-link-btn nw-copy-btn" onClick={() => onCopyProductCode(scanResult.product.id.toUpperCase())}>복사</button>
+                          </div>
+                          <div className="name">{scanResult.product.name}</div>
+                          <button type="button" className="toggle-option-btn" onClick={() => setScanExpanded((prev) => !prev)}>
+                            {scanExpanded ? "옵션 접기 ^" : "옵션 펼치기 v"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="brand">{scanResult.product.brand}</div>
+                      <div className="maker-info">
+                        <strong>-</strong>
+                        <span>Supplied</span>
+                      </div>
+                      <div className="stock">
+                        <div><span>총 재고</span><strong>{formatNumber(scanResult.product.locations.reduce((sum, location) => sum + location.qty, 0))}개</strong></div>
+                        <div><span>가용 재고</span><strong>{formatNumber(scanResult.product.locations.reduce((sum, location) => sum + location.qty, 0))}개</strong></div>
+                        <div><span>안전 재고</span><strong>0개</strong></div>
+                      </div>
+                    </div>
+                    {scanExpanded ? (
+                      <div className="nw-lookup-option-wrap">
+                        <table className="nw-table nw-lookup-option-table">
+                          <thead>
+                            <tr>
+                              <th className="check"><input type="checkbox" /></th>
+                              <th>옵션명</th>
+                              <th>수량 (가용 재고)</th>
+                              <th>로케이션</th>
+                              <th>글로벌 바코드</th>
+                              <th>원가</th>
+                              <th>재고 금액</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {scanResult.product.locations.map((location) => (
+                              <tr key={`${scanResult.product.id}-${location.code}`}>
+                                <td className="check"><input type="checkbox" /></td>
+                                <td>{scanResult.product.option}</td>
+                                <td>{formatNumber(location.qty)}개 ({formatNumber(location.qty)}개)</td>
+                                <td>{location.code}</td>
+                                <td>{scanResult.product.barcode}</td>
+                                <td>{formatCurrency(0)}</td>
+                                <td>{formatCurrency(0)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </article>
+                </div>
               ) : (
                 <div className="nw-mobile-empty compact nw-survey-input-empty">
                   <strong>입력한 값과 일치하는 상품이 없습니다.</strong>
@@ -3592,6 +3982,7 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
                   <th>차수</th>
                   <th>등록일시</th>
                   <th>화주사</th>
+                  <th>상품코드</th>
                   <th>바코드</th>
                   <th>상품명 / 옵션</th>
                   <th>로케이션</th>
@@ -3601,20 +3992,31 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredList.map((entry) => (
-                  <tr key={entry.id}>
-                    <td><input type="checkbox" checked={selectedIds.has(entry.id)} onChange={() => toggleRowSelect(entry.id)} /></td>
-                    <td>{entry.round}</td>
-                    <td>{entry.createdAt}</td>
-                    <td>{entry.owner}</td>
-                    <td>{entry.barcode}</td>
-                    <td>{entry.productName} / {entry.option}</td>
-                    <td>{entry.locationCode}</td>
-                    <td>{formatNumber(entry.qty)}</td>
-                    <td><span className={`nw-status ${statusClass(entry.status)}`}>{entry.status}</span></td>
-                    <td>{entry.source}</td>
-                  </tr>
-                ))}
+                {filteredList.map((entry) => {
+                  const productCode = findProductCodeByBarcode(entry.barcode);
+                  return (
+                    <tr key={entry.id}>
+                      <td><input type="checkbox" checked={selectedIds.has(entry.id)} onChange={() => toggleRowSelect(entry.id)} /></td>
+                      <td>{entry.round}</td>
+                      <td>{entry.createdAt}</td>
+                      <td>{entry.owner}</td>
+                      <td>
+                        <div className="nw-copy-inline">
+                          <span>{productCode || "-"}</span>
+                          {productCode ? (
+                            <button type="button" className="nw-link-btn nw-copy-btn" onClick={() => onCopyProductCode(productCode)}>복사</button>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>{entry.barcode}</td>
+                      <td>{entry.productName} / {entry.option}</td>
+                      <td>{entry.locationCode}</td>
+                      <td>{formatNumber(entry.qty)}</td>
+                      <td><span className={`nw-status ${statusClass(entry.status)}`}>{entry.status}</span></td>
+                      <td>{entry.source}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -3626,7 +4028,7 @@ function SurveyInputTab({ surveyEntries, setSurveyEntries, showToast }) {
   );
 }
 
-function CurrentCompareTab({ surveyEntries, setAdjustments, showToast }) {
+function CurrentCompareTab({ surveyEntries, setAdjustments, showToast, onCopyProductCode }) {
   const [resultFilter, setResultFilter] = useState("ALL");
   const [minDiff, setMinDiff] = useState("");
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -3790,6 +4192,7 @@ function CurrentCompareTab({ surveyEntries, setAdjustments, showToast }) {
               <tr>
                 <th />
                 <th>화주사</th>
+                <th>상품코드</th>
                 <th>바코드</th>
                 <th>상품명 / 옵션</th>
                 <th>로케이션</th>
@@ -3800,19 +4203,30 @@ function CurrentCompareTab({ surveyEntries, setAdjustments, showToast }) {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((row) => (
-                <tr key={row.id}>
-                  <td><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} /></td>
-                  <td>{row.owner}</td>
-                  <td>{row.barcode}</td>
-                  <td>{row.productName} / {row.option}</td>
-                  <td>{row.locationCode}</td>
-                  <td>{formatNumber(row.surveyQty)}</td>
-                  <td>{formatNumber(row.systemQty)}</td>
-                  <td className={row.diff > 0 ? "text-plus" : row.diff < 0 ? "text-minus" : ""}>{row.diff > 0 ? `+${formatNumber(row.diff)}` : formatNumber(row.diff)}</td>
-                  <td><span className={`nw-status ${statusClass(row.result)}`}>{row.result}</span></td>
-                </tr>
-              ))}
+              {filteredRows.map((row) => {
+                const productCode = findProductCodeByBarcode(row.barcode);
+                return (
+                  <tr key={row.id}>
+                    <td><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} /></td>
+                    <td>{row.owner}</td>
+                    <td>
+                      <div className="nw-copy-inline">
+                        <span>{productCode || "-"}</span>
+                        {productCode ? (
+                          <button type="button" className="nw-link-btn nw-copy-btn" onClick={() => onCopyProductCode(productCode)}>복사</button>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>{row.barcode}</td>
+                    <td>{row.productName} / {row.option}</td>
+                    <td>{row.locationCode}</td>
+                    <td>{formatNumber(row.surveyQty)}</td>
+                    <td>{formatNumber(row.systemQty)}</td>
+                    <td className={row.diff > 0 ? "text-plus" : row.diff < 0 ? "text-minus" : ""}>{row.diff > 0 ? `+${formatNumber(row.diff)}` : formatNumber(row.diff)}</td>
+                    <td><span className={`nw-status ${statusClass(row.result)}`}>{row.result}</span></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -4194,6 +4608,11 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
   const adjustmentQty = selectedProduct ? toNumber(actualQty) - selectedProduct.systemQty : 0;
   const canSubmitRequest = !!selectedProduct && !!effectiveLocation && actualQty !== "" && adjustmentQty !== 0;
 
+  const copyProductCode = async (productCode) => {
+    const copied = await copyToClipboard(productCode);
+    showToast(copied ? "상품코드가 복사되었습니다." : "상품코드 복사에 실패했습니다.");
+  };
+
   const createRequest = () => {
     if (!effectiveLocation || !selectedProduct) {
       showToast("위치와 상품을 선택하세요.");
@@ -4387,6 +4806,18 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
                                 <strong>{product.name}</strong>
                                 <span>{product.option}</span>
                                 <span>{product.barcode}</span>
+                                <div className="nw-copy-inline">
+                                  <span>{product.productId ? product.productId.toUpperCase() : "-"}</span>
+                                  {product.productId ? (
+                                    <button type="button" className="nw-link-btn nw-copy-btn" onClick={(event) => {
+                                      event.stopPropagation();
+                                      copyProductCode(product.productId.toUpperCase());
+                                    }}
+                                    >
+                                      복사
+                                    </button>
+                                  ) : null}
+                                </div>
                                 <span className="brand">{product.brand}</span>
                               </div>
                               <div className="qty"><span>{formatNumber(product.systemQty)}개</span></div>
@@ -4557,6 +4988,18 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
                                 <strong>{item.productName}</strong>
                                 <span>{item.option}</span>
                                 <span>{item.barcode}</span>
+                                <div className="nw-copy-inline">
+                                  <span>{findProductCodeByBarcode(item.barcode) || "-"}</span>
+                                  {findProductCodeByBarcode(item.barcode) ? (
+                                    <button type="button" className="nw-link-btn nw-copy-btn" onClick={(event) => {
+                                      event.stopPropagation();
+                                      copyProductCode(findProductCodeByBarcode(item.barcode));
+                                    }}
+                                    >
+                                      복사
+                                    </button>
+                                  ) : null}
+                                </div>
                                 <span className="brand">{item.brand || "-"}</span>
                               </div>
                               <div className="qty"><span>{formatNumber(item.systemQty)}개</span></div>
@@ -4591,7 +5034,7 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
   );
 }
 
-function AdminAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
+function AdminAdjustmentPanel({ adjustments, setAdjustments, showToast, onCopyProductCode }) {
   const [filters, setFilters] = useState({ owner: "ALL", status: "ALL" });
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
@@ -4670,6 +5113,7 @@ function AdminAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
               <th />
               <th>요청일시</th>
               <th>작업자</th>
+              <th>상품코드</th>
               <th>상품명 / 바코드</th>
               <th>위치</th>
               <th>전산</th>
@@ -4684,11 +5128,20 @@ function AdminAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
           <tbody>
             {rows.map((row) => {
               const diff = row.actualQty - row.systemQty;
+              const productCode = findProductCodeByBarcode(row.barcode);
               return (
                 <tr key={row.id}>
                   <td><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} /></td>
                   <td>{row.requestedAt}</td>
                   <td>{row.worker}</td>
+                  <td>
+                    <div className="nw-copy-inline">
+                      <span>{productCode || "-"}</span>
+                      {productCode ? (
+                        <button type="button" className="nw-link-btn nw-copy-btn" onClick={() => onCopyProductCode(productCode)}>복사</button>
+                      ) : null}
+                    </div>
+                  </td>
                   <td>{row.productName} / {row.barcode}</td>
                   <td>{row.zone} {row.locationCode}</td>
                   <td>{formatNumber(row.systemQty)}</td>
@@ -4730,6 +5183,11 @@ function InventorySurveyPage({ surveyEntries, setSurveyEntries, adjustments, set
     history: { title: "작업내역", description: "조사 이력, 담당자, 상태를 날짜 기준으로 조회합니다." },
   };
   const activeGuide = tabGuide[activeTab] || tabGuide.lookup;
+
+  const handleCopyProductCode = async (productCode) => {
+    const copied = await copyToClipboard(productCode);
+    showToast(copied ? "상품코드가 복사되었습니다." : "상품코드 복사에 실패했습니다.");
+  };
 
   return (
     <SidebarLayout title="재고조사">
@@ -4773,9 +5231,23 @@ function InventorySurveyPage({ surveyEntries, setSurveyEntries, adjustments, set
           <button type="button" className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}>작업내역</button>
         </div>
 
-        {activeTab === "lookup" ? <InventoryLookupTab onMoveToInput={() => setActiveTab("input")} /> : null}
-        {activeTab === "input" ? <SurveyInputTab surveyEntries={surveyEntries} setSurveyEntries={setSurveyEntries} showToast={showToast} /> : null}
-        {activeTab === "compare" ? <CurrentCompareTab surveyEntries={surveyEntries} setAdjustments={setAdjustments} showToast={showToast} /> : null}
+        {activeTab === "lookup" ? <InventoryLookupTab onMoveToInput={() => setActiveTab("input")} showToast={showToast} /> : null}
+        {activeTab === "input" ? (
+          <SurveyInputTab
+            surveyEntries={surveyEntries}
+            setSurveyEntries={setSurveyEntries}
+            showToast={showToast}
+            onCopyProductCode={handleCopyProductCode}
+          />
+        ) : null}
+        {activeTab === "compare" ? (
+          <CurrentCompareTab
+            surveyEntries={surveyEntries}
+            setAdjustments={setAdjustments}
+            showToast={showToast}
+            onCopyProductCode={handleCopyProductCode}
+          />
+        ) : null}
         {activeTab === "history" ? <WorkHistoryTab surveyEntries={surveyEntries} /> : null}
       </div>
 
@@ -4794,6 +5266,11 @@ function InventoryAdjustmentPage({ adjustments, setAdjustments }) {
     approved: adjustments.filter((item) => item.status === "승인됨").length,
     rejected: adjustments.filter((item) => item.status === "거절됨").length,
   }), [adjustments]);
+
+  const handleCopyProductCode = async (productCode) => {
+    const copied = await copyToClipboard(productCode);
+    showToast(copied ? "상품코드가 복사되었습니다." : "상품코드 복사에 실패했습니다.");
+  };
 
   return (
     <SidebarLayout title="재고조정">
@@ -4855,7 +5332,12 @@ function InventoryAdjustmentPage({ adjustments, setAdjustments }) {
         {adjustmentRole === "worker" ? (
           <WorkerAdjustmentPanel adjustments={adjustments} setAdjustments={setAdjustments} showToast={showToast} />
         ) : (
-          <AdminAdjustmentPanel adjustments={adjustments} setAdjustments={setAdjustments} showToast={showToast} />
+          <AdminAdjustmentPanel
+            adjustments={adjustments}
+            setAdjustments={setAdjustments}
+            showToast={showToast}
+            onCopyProductCode={handleCopyProductCode}
+          />
         )}
       </div>
 
