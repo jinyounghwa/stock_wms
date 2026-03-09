@@ -1174,7 +1174,44 @@ function SlowMovingBasePage({
     };
   }, [riskRows]);
 
-  const topRiskRows = useMemo(() => riskRows.slice(0, 20), [riskRows]);
+  const primeZoneCompositionRows = useMemo(() => {
+    const grouped = new Map();
+
+    riskRows.forEach((row) => {
+      const zoneBase = getZoneBase(row.zone);
+      if (!["출고존", "입고존", "보관존"].includes(zoneBase)) return;
+
+        const existing = grouped.get(row.skuId) || {
+          skuId: row.skuId,
+          productName: row.productName,
+          brand: row.brand,
+          outboundQty: 0,
+          inboundQty: 0,
+          storageQty: 0,
+          totalQty: 0,
+          locationCount: 0,
+          avgDaysNoOutbound: 0,
+        };
+
+        if (zoneBase === "출고존") existing.outboundQty += row.qty;
+        else if (zoneBase === "입고존") existing.inboundQty += row.qty;
+        else existing.storageQty += row.qty;
+
+        existing.totalQty += row.qty;
+        existing.locationCount += 1;
+        existing.avgDaysNoOutbound += row.daysNoOutbound;
+        grouped.set(row.skuId, existing);
+      });
+
+    return [...grouped.values()]
+      .map((item) => ({
+        ...item,
+        avgDaysNoOutbound: item.locationCount ? item.avgDaysNoOutbound / item.locationCount : 0,
+        primeZoneQty: item.outboundQty + item.inboundQty + item.storageQty,
+      }))
+      .sort((a, b) => b.primeZoneQty - a.primeZoneQty || b.outboundQty - a.outboundQty || b.inboundQty - a.inboundQty || b.avgDaysNoOutbound - a.avgDaysNoOutbound)
+      .slice(0, 20);
+  }, [riskRows]);
 
   const priorityActionRows = useMemo(
     () => riskRows.filter((row) => row.priorityScore >= 55).slice(0, 20),
@@ -1258,17 +1295,34 @@ function SlowMovingBasePage({
   }, [riskRows]);
 
   const topRiskBarData = useMemo(() => ({
-    labels: topRiskRows.map((row) => row.locationCode),
+    labels: primeZoneCompositionRows.map((row) => `${row.skuId.toUpperCase()} · ${row.brand}`),
     datasets: [
       {
-        label: "우선순위 점수",
-        data: topRiskRows.map((row) => row.priorityScore),
-        backgroundColor: topRiskRows.map((row) => (row.priorityScore >= 75 ? "#e35b5b" : row.priorityScore >= 60 ? "#f2a341" : "#69b3ff")),
+        label: "출고존",
+        data: primeZoneCompositionRows.map((row) => row.outboundQty),
+        backgroundColor: "#e35b5b",
         borderRadius: 6,
         maxBarThickness: 18,
+        stack: "zone",
+      },
+      {
+        label: "입고존",
+        data: primeZoneCompositionRows.map((row) => row.inboundQty),
+        backgroundColor: "#f2a341",
+        borderRadius: 6,
+        maxBarThickness: 18,
+        stack: "zone",
+      },
+      {
+        label: "보관존",
+        data: primeZoneCompositionRows.map((row) => row.storageQty),
+        backgroundColor: "#69b3ff",
+        borderRadius: 6,
+        maxBarThickness: 18,
+        stack: "zone",
       },
     ],
-  }), [topRiskRows]);
+  }), [primeZoneCompositionRows]);
 
   const zoneDecisionBarData = useMemo(() => ({
     labels: zoneDecisionSummary.map((item) => item.zone),
@@ -1938,14 +1992,22 @@ function SlowMovingBasePage({
       indexAxis: "y",
       plugins: {
         ...options.plugins,
-        legend: { display: false },
+        legend: {
+          ...options.plugins.legend,
+          position: "bottom",
+        },
         tooltip: {
           ...options.plugins.tooltip,
           callbacks: {
             label: (context) => {
-              const row = topRiskRows[context.dataIndex];
-              if (!row) return `${context.raw}점`;
-              return `${row.zone} | ${formatNumber(row.qty)}개 | ${context.raw}점`;
+              const row = primeZoneCompositionRows[context.dataIndex];
+              if (!row) return `${context.dataset.label} ${formatNumber(context.raw)}개`;
+              return `${context.dataset.label} ${formatNumber(context.raw)}개`;
+            },
+            afterLabel: (context) => {
+              const row = primeZoneCompositionRows[context.dataIndex];
+              if (!row) return "";
+              return `${row.productName} | 총 ${formatNumber(row.primeZoneQty)}개 | 평균 미출고 ${formatNumber(row.avgDaysNoOutbound)}일`;
             },
           },
         },
@@ -1955,16 +2017,17 @@ function SlowMovingBasePage({
         x: {
           ...options.scales.x,
           min: 0,
-          max: 100,
-          ticks: { ...options.scales.x.ticks, stepSize: 20 },
+          stacked: true,
+          suggestedMax: Math.max(...primeZoneCompositionRows.map((row) => row.primeZoneQty), 10) + 5,
         },
         y: {
           ...options.scales.y,
+          stacked: true,
           ticks: { ...options.scales.y.ticks, autoSkip: false },
         },
       },
     };
-  }, [topRiskRows]);
+  }, [primeZoneCompositionRows]);
 
   const stackedQtyOptions = useMemo(() => {
     const options = chartBaseOptions();
@@ -2252,7 +2315,7 @@ function SlowMovingBasePage({
       </section>
 
       <section className="nw-chart-grid slow">
-        <ChartPanel title="좋은 위치 점유 우선순위 TOP 20" helper="점수가 높을수록 먼저 이동/처리 검토">
+        <ChartPanel title="존별 좋은 위치 잠식 TOP 20" helper="부진 SKU별 출고존·입고존·보관존 적치 구성을 함께 비교">
           <Bar data={topRiskBarData} options={topRiskBarOptions} />
         </ChartPanel>
 
@@ -2260,7 +2323,7 @@ function SlowMovingBasePage({
           <Bar data={zoneDecisionBarData} options={stackedQtyOptions} />
         </ChartPanel>
 
-        <ChartPanel title="이동/처리 우선순위" helper="점수 55점 이상 위치 · [존 배지] · 구역 · 조치레벨" className="tall decision-list-panel">
+        <ChartPanel title="이동/처리 실행 대기열" helper="점수 55점 이상 위치 · [존 배지] · 구역 · 조치레벨">
           {priorityActionRows.length ? (
             <div className="nw-hotspot-list">
               {priorityActionRows.map((row, index) => (
