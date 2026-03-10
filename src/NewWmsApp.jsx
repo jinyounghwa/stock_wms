@@ -1015,7 +1015,7 @@ function intensityColor(intensity) {
 function SlowMovingBasePage({
   menuTitle = "부진재고",
   pageTitle = "부진재고",
-  pageDescription = "SKU 단위 필터 + 위치 단위 출력, 대시보드/리스트 전환",
+  pageDescription = "하나의 SKU는 여러 위치에 있을 수 있으며, 조건은 SKU 단위로 적용하고 결과는 위치별로 출력합니다.",
   visualVariant = "v1",
   mode = "list",
   listPath = "/slow-moving",
@@ -1094,6 +1094,8 @@ function SlowMovingBasePage({
               lastInboundDate: sku.lastInboundDate,
               lastOutboundDate: sku.lastOutboundDate,
               daysNoOutbound: sku.daysNoOutbound,
+              daysSinceInbound: sku.daysSinceInbound,
+              minStock: toNumber(filters.minStock),
               availableQty: location.availableQty,
               reservedQty: location.reservedQty,
               skuTotalQty,
@@ -1102,7 +1104,7 @@ function SlowMovingBasePage({
             };
           }),
       ),
-    [filteredSkus, filters.zone],
+    [filteredSkus, filters.zone, filters.minStock],
   );
 
   const summary = useMemo(() => {
@@ -2282,7 +2284,7 @@ function SlowMovingBasePage({
         </div>
 
         <div className="nw-helper-text">
-          미출고 일수/마지막 입고 일수/최소 재고는 SKU 단위로 필터링하고, 결과는 위치 단위로 출력됩니다.
+          하나의 SKU는 여러 위치에 있을 수 있습니다. 미출고 일수, 마지막 입고 일수, 최소 재고 등의 조건은 SKU 단위로 적용하고, 리스트는 위치별로 표시합니다.
         </div>
 
         <div className="nw-panel-actions">
@@ -2359,7 +2361,7 @@ function SlowMovingBasePage({
           <div className="nw-panel-title-row">
             <h3>추출 결과</h3>
             <div className="nw-helper-text">
-              SKU 단위 조건으로 추출된 위치 목록 상위 20건입니다. 행 클릭 후 시각화 화면에서 이동/처리 우선순위를 확인할 수 있습니다.
+              하나의 SKU는 여러 위치에 있을 수 있습니다. 미출고 일수, 마지막 입고 일수, 최소 재고 등의 조건은 SKU 단위로 적용하고, 리스트는 위치별로 표시합니다.
             </div>
           </div>
 
@@ -2374,10 +2376,10 @@ function SlowMovingBasePage({
                   <th>구역</th>
                   <th>위치</th>
                   <th>시즌</th>
-                  <th>최근 출고일</th>
-                  <th>최근 입고일</th>
+                  <th>미출고 일수</th>
+                  <th>마지막 입고 일수</th>
+                  <th>최소 재고</th>
                   <th>가용 재고 수량</th>
-                  <th>예약 재고 수량</th>
                 </tr>
               </thead>
               <tbody>
@@ -2397,10 +2399,10 @@ function SlowMovingBasePage({
                     <td>{row.area}</td>
                     <td>{row.locationCode}</td>
                     <td><span className="nw-season-chip">{row.season}</span></td>
-                    <td>{row.lastOutboundDate}</td>
-                    <td>{row.lastInboundDate}</td>
+                    <td>{formatNumber(row.daysNoOutbound)}일</td>
+                    <td>{formatNumber(row.daysSinceInbound)}일</td>
+                    <td>{formatNumber(row.minStock)}</td>
                     <td>{formatNumber(row.availableQty)}</td>
-                    <td>{formatNumber(row.reservedQty)}</td>
                   </tr>
                 ))}
               </tbody>
