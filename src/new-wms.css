@@ -1870,6 +1870,214 @@
   margin-bottom: 10px;
 }
 
+.nw-location-ops-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.nw-location-ops-hero,
+.nw-location-ops-card,
+.nw-location-zone-card {
+  border: 1px solid #dbe5f2;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.nw-location-ops-hero {
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 45%, #f5f9ff 100%);
+  display: grid;
+  gap: 14px;
+}
+
+.hero-topline,
+.ops-card-head,
+.zone-head,
+.label-row,
+.zone-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-topline span,
+.ops-card-head span,
+.zone-head strong {
+  color: #2f4666;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hero-topline em,
+.ops-card-head em,
+.zone-head em,
+.label-row em,
+.zone-foot span {
+  color: #7487a1;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.hero-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.95fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.hero-main strong {
+  display: block;
+  color: #213753;
+  font-size: 42px;
+  line-height: 0.96;
+  letter-spacing: -0.6px;
+}
+
+.hero-main p,
+.nw-location-ops-card p {
+  margin: 0;
+  color: #72849e;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hero-side-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hero-side-metrics div,
+.ops-card-metrics div {
+  border: 1px solid #dfe8f4;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.hero-side-metrics span,
+.ops-card-metrics span,
+.ops-zone-highlight span,
+.zone-metrics span {
+  color: #7487a1;
+  font-size: 11px;
+}
+
+.hero-side-metrics b,
+.ops-card-metrics strong,
+.ops-zone-highlight b {
+  color: #2a425f;
+  font-size: 18px;
+}
+
+.hero-progress-group,
+.zone-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.hero-progress-row {
+  display: grid;
+  gap: 5px;
+}
+
+.hero-stack-bar,
+.hero-capacity-bar,
+.mini-bar {
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid #dce6f4;
+  background: #edf4fc;
+  display: flex;
+}
+
+.hero-stack-bar i,
+.hero-capacity-bar i,
+.mini-bar i {
+  display: block;
+  height: 100%;
+}
+
+.hero-stack-bar i.available {
+  background: #2f8fff;
+}
+
+.hero-stack-bar i.reserved {
+  background: #f08a2f;
+}
+
+.hero-capacity-bar i,
+.mini-bar i {
+  background: linear-gradient(90deg, #6fb4ff, #2f8fff);
+}
+
+.mini-bar.reserved i {
+  background: linear-gradient(90deg, #ffbd72, #f08a2f);
+}
+
+.nw-location-ops-card {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.nw-location-ops-card.accent {
+  background: linear-gradient(180deg, #fffaf4 0%, #ffffff 100%);
+  border-color: #edd9bf;
+}
+
+.ops-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ops-zone-highlight {
+  border: 1px solid #e6d5bf;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 12px;
+  display: grid;
+  gap: 3px;
+}
+
+.ops-zone-highlight strong {
+  color: #8a581f;
+  font-size: 14px;
+}
+
+.ops-zone-inline,
+.zone-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.ops-zone-inline span {
+  color: #735b42;
+  font-size: 11px;
+}
+
+.nw-location-zone-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.nw-location-zone-card {
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  background: #fbfdff;
+}
+
 .nw-location-selection-visual {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3940,6 +4148,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .nw-location-ops-grid {
+    grid-template-columns: 1fr;
+  }
+
   .nw-location-selection-visual {
     grid-template-columns: 1fr;
   }
@@ -4102,6 +4314,13 @@
   .nw-summary-grid.location-kpi,
   .nw-summary-grid.location-selection-kpi,
   .nw-summary-grid.location-visual-kpi {
+    grid-template-columns: 1fr;
+  }
+
+  .nw-location-ops-grid,
+  .hero-main,
+  .hero-side-metrics,
+  .ops-card-metrics {
     grid-template-columns: 1fr;
   }
 

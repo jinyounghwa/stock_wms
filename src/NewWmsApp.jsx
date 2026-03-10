@@ -2658,15 +2658,71 @@ function LocationStockPage({ mode = "list" }) {
     const totalStock = rows.reduce((sum, row) => sum + row.stock, 0);
     const totalAvailable = rows.reduce((sum, row) => sum + row.available, 0);
     const totalReserved = rows.reduce((sum, row) => sum + row.reserved, 0);
+    const totalCapacity = rows.reduce((sum, row) => sum + row.capacity, 0);
     const locationCount = rows.length;
     const avgUtil = locationCount ? rows.reduce((sum, row) => sum + row.util, 0) / locationCount : 0;
     const reservedRatio = totalStock > 0 ? (totalReserved / totalStock) * 100 : 0;
-    return { totalStock, totalAvailable, totalReserved, locationCount, avgUtil, reservedRatio };
+    return { totalStock, totalAvailable, totalReserved, totalCapacity, locationCount, avgUtil, reservedRatio };
   };
 
   const selectionSummary = summarizeRows(selectedRows.length ? selectedRows : filteredRows);
   const visualSummary = summarizeRows(filteredRows);
   const selectionReservedPct = Math.min(100, Math.max(selectionSummary.reservedRatio, 0));
+  const visualAvailablePct = Math.min(100, Math.max(visualSummary.totalStock > 0 ? (visualSummary.totalAvailable / visualSummary.totalStock) * 100 : 0, 0));
+  const visualCapacityPct = Math.min(100, Math.max(visualSummary.totalCapacity > 0 ? (visualSummary.totalStock / visualSummary.totalCapacity) * 100 : 0, 0));
+
+  const locationDashboard = useMemo(() => {
+    const activeLocations = filteredRows.filter((row) => row.stock > 0);
+    const emptyLocations = filteredRows.filter((row) => row.stock === 0);
+    const highUtilLocations = filteredRows.filter((row) => row.util >= 85);
+    const highReservedLocations = filteredRows.filter((row) => row.stock > 0 && ((row.reserved / row.stock) * 100) >= 35);
+    const avgProductsPerLocation = filteredRows.length
+      ? filteredRows.reduce((sum, row) => sum + row.products.length, 0) / filteredRows.length
+      : 0;
+    const freeCapacity = Math.max(visualSummary.totalCapacity - visualSummary.totalStock, 0);
+
+    const zoneMap = {};
+    filteredRows.forEach((row) => {
+      if (!zoneMap[row.zone]) {
+        zoneMap[row.zone] = {
+          zone: row.zone,
+          stock: 0,
+          available: 0,
+          reserved: 0,
+          capacity: 0,
+          count: 0,
+          utilTotal: 0,
+        };
+      }
+      zoneMap[row.zone].stock += row.stock;
+      zoneMap[row.zone].available += row.available;
+      zoneMap[row.zone].reserved += row.reserved;
+      zoneMap[row.zone].capacity += row.capacity;
+      zoneMap[row.zone].count += 1;
+      zoneMap[row.zone].utilTotal += row.util;
+    });
+
+    const zoneSummaries = Object.values(zoneMap)
+      .map((item) => ({
+        ...item,
+        avgUtil: item.count ? item.utilTotal / item.count : 0,
+        reservedRatio: item.stock > 0 ? (item.reserved / item.stock) * 100 : 0,
+        fillRatio: item.capacity > 0 ? (item.stock / item.capacity) * 100 : 0,
+      }))
+      .sort((a, b) => b.stock - a.stock);
+
+    return {
+      activeLocations,
+      emptyLocations,
+      highUtilLocations,
+      highReservedLocations,
+      avgProductsPerLocation,
+      freeCapacity,
+      zoneSummaries,
+      topZone: zoneSummaries[0] || null,
+      watchZone: [...zoneSummaries].sort((a, b) => b.reservedRatio - a.reservedRatio || b.reserved - a.reserved)[0] || null,
+    };
+  }, [filteredRows, visualSummary.totalCapacity, visualSummary.totalStock]);
 
   const isAllSelected = filteredRows.length > 0 && filteredRows.every((row) => selectedRowIds.has(row.id));
 
@@ -2817,23 +2873,138 @@ function LocationStockPage({ mode = "list" }) {
 
       {viewMode === "visual" ? (
         <>
-          <section className="nw-summary-grid location-visual-kpi">
-            <article className="nw-summary-card">
-              <div className="label">합계 재고</div>
-              <strong>{formatNumber(visualSummary.totalStock)}</strong>
-              <span>필터 조건 기준</span>
+          <section className="nw-location-ops-grid">
+            <article className="nw-location-ops-hero">
+              <div className="hero-topline">
+                <span>운영 요약</span>
+                <em>{formatNumber(visualSummary.locationCount)}개 위치 기준</em>
+              </div>
+              <div className="hero-main">
+                <div>
+                  <strong>{formatNumber(visualSummary.totalStock)}</strong>
+                  <p>현재 적재 재고 합계</p>
+                </div>
+                <div className="hero-side-metrics">
+                  <div>
+                    <span>가용 재고</span>
+                    <b>{formatNumber(visualSummary.totalAvailable)}</b>
+                  </div>
+                  <div>
+                    <span>잔여 적재 여유</span>
+                    <b>{formatNumber(locationDashboard.freeCapacity)}</b>
+                  </div>
+                  <div>
+                    <span>평균 위치 적재율</span>
+                    <b>{visualSummary.avgUtil.toFixed(1)}%</b>
+                  </div>
+                </div>
+              </div>
+              <div className="hero-progress-group">
+                <div className="hero-progress-row">
+                  <div className="label-row">
+                    <span>재고 구성</span>
+                    <em>가용 {visualAvailablePct.toFixed(1)}% / 미발송 {visualSummary.reservedRatio.toFixed(1)}%</em>
+                  </div>
+                  <div className="hero-stack-bar">
+                    <i className="available" style={{ width: `${visualAvailablePct}%` }} />
+                    <i className="reserved" style={{ width: `${Math.min(100, Math.max(visualSummary.reservedRatio, 0))}%` }} />
+                  </div>
+                </div>
+                <div className="hero-progress-row">
+                  <div className="label-row">
+                    <span>공간 사용률</span>
+                    <em>{visualCapacityPct.toFixed(1)}% 사용 / {Math.max(0, 100 - visualCapacityPct).toFixed(1)}% 여유</em>
+                  </div>
+                  <div className="hero-capacity-bar">
+                    <i style={{ width: `${visualCapacityPct}%` }} />
+                  </div>
+                </div>
+              </div>
             </article>
-            <article className="nw-summary-card warn">
-              <div className="label">미발송</div>
-              <strong>{formatNumber(visualSummary.totalReserved)}</strong>
-              <span>합계 대비 {visualSummary.reservedRatio.toFixed(1)}%</span>
+
+            <article className="nw-location-ops-card">
+              <div className="ops-card-head">
+                <span>주의 구간</span>
+                <em>재배치 우선순위</em>
+              </div>
+              <div className="ops-card-metrics">
+                <div>
+                  <strong>{formatNumber(locationDashboard.highUtilLocations.length)}</strong>
+                  <span>고적재 위치</span>
+                </div>
+                <div>
+                  <strong>{formatNumber(locationDashboard.highReservedLocations.length)}</strong>
+                  <span>미발송 집중 위치</span>
+                </div>
+                <div>
+                  <strong>{formatNumber(locationDashboard.emptyLocations.length)}</strong>
+                  <span>비어 있는 위치</span>
+                </div>
+              </div>
+              <p>
+                적재율 85% 이상 또는 미발송 비중이 높은 위치를 먼저 보면,
+                출고 병목과 공간 잠식을 빠르게 찾을 수 있습니다.
+              </p>
             </article>
-            <article className="nw-summary-card">
-              <div className="label">위치 수</div>
-              <strong>{formatNumber(visualSummary.locationCount)}</strong>
-              <span>평균 적재 비율 {visualSummary.avgUtil.toFixed(1)}%</span>
+
+            <article className="nw-location-ops-card accent">
+              <div className="ops-card-head">
+                <span>집중 구간</span>
+                <em>존 기준 집계</em>
+              </div>
+              {locationDashboard.topZone ? (
+                <>
+                  <div className="ops-zone-highlight">
+                    <strong>{locationDashboard.topZone.zone}</strong>
+                    <b>{formatNumber(locationDashboard.topZone.stock)}</b>
+                    <span>가장 많은 재고가 쌓인 존</span>
+                  </div>
+                  <div className="ops-zone-inline">
+                    <span>가용 {formatNumber(locationDashboard.topZone.available)}</span>
+                    <span>미발송 {formatNumber(locationDashboard.topZone.reserved)}</span>
+                    <span>평균 적재 {locationDashboard.topZone.avgUtil.toFixed(1)}%</span>
+                  </div>
+                </>
+              ) : (
+                <div className="nw-empty inline">집계할 존이 없습니다.</div>
+              )}
+              <p>
+                {locationDashboard.watchZone
+                  ? `${locationDashboard.watchZone.zone}은(는) 미발송 비중 ${locationDashboard.watchZone.reservedRatio.toFixed(1)}%로 관찰이 필요합니다.`
+                  : "관찰 대상 존이 없습니다."}
+              </p>
             </article>
           </section>
+
+          {locationDashboard.zoneSummaries.length ? (
+            <section className="nw-location-zone-strip">
+              {locationDashboard.zoneSummaries.map((item) => (
+                <article key={item.zone} className="nw-location-zone-card">
+                  <div className="zone-head">
+                    <strong>{item.zone}</strong>
+                    <em>{formatNumber(item.count)}개 위치</em>
+                  </div>
+                  <div className="zone-metrics">
+                    <span>재고 {formatNumber(item.stock)}</span>
+                    <span>가용 {formatNumber(item.available)}</span>
+                    <span>미발송 {formatNumber(item.reserved)}</span>
+                  </div>
+                  <div className="zone-bars">
+                    <div className="mini-bar">
+                      <i style={{ width: `${Math.min(100, Math.max(item.fillRatio, 0))}%` }} />
+                    </div>
+                    <div className="mini-bar reserved">
+                      <i style={{ width: `${Math.min(100, Math.max(item.reservedRatio, 0))}%` }} />
+                    </div>
+                  </div>
+                  <div className="zone-foot">
+                    <span>적재 {item.fillRatio.toFixed(1)}%</span>
+                    <span>미발송 {item.reservedRatio.toFixed(1)}%</span>
+                  </div>
+                </article>
+              ))}
+            </section>
+          ) : null}
 
           <section className="nw-panel">
             <div className="nw-panel-title-row">
@@ -2946,6 +3117,139 @@ function LocationStockPage({ mode = "list" }) {
         </>
       ) : (
         <>
+          <section className="nw-location-ops-grid">
+            <article className="nw-location-ops-hero">
+              <div className="hero-topline">
+                <span>운영 요약</span>
+                <em>{formatNumber(visualSummary.locationCount)}개 위치 기준</em>
+              </div>
+              <div className="hero-main">
+                <div>
+                  <strong>{formatNumber(visualSummary.totalStock)}</strong>
+                  <p>현재 적재 재고 합계</p>
+                </div>
+                <div className="hero-side-metrics">
+                  <div>
+                    <span>가용 재고</span>
+                    <b>{formatNumber(visualSummary.totalAvailable)}</b>
+                  </div>
+                  <div>
+                    <span>잔여 적재 여유</span>
+                    <b>{formatNumber(locationDashboard.freeCapacity)}</b>
+                  </div>
+                  <div>
+                    <span>평균 위치 적재율</span>
+                    <b>{visualSummary.avgUtil.toFixed(1)}%</b>
+                  </div>
+                </div>
+              </div>
+              <div className="hero-progress-group">
+                <div className="hero-progress-row">
+                  <div className="label-row">
+                    <span>재고 구성</span>
+                    <em>가용 {visualAvailablePct.toFixed(1)}% / 미발송 {visualSummary.reservedRatio.toFixed(1)}%</em>
+                  </div>
+                  <div className="hero-stack-bar">
+                    <i className="available" style={{ width: `${visualAvailablePct}%` }} />
+                    <i className="reserved" style={{ width: `${Math.min(100, Math.max(visualSummary.reservedRatio, 0))}%` }} />
+                  </div>
+                </div>
+                <div className="hero-progress-row">
+                  <div className="label-row">
+                    <span>공간 사용률</span>
+                    <em>{visualCapacityPct.toFixed(1)}% 사용 / {Math.max(0, 100 - visualCapacityPct).toFixed(1)}% 여유</em>
+                  </div>
+                  <div className="hero-capacity-bar">
+                    <i style={{ width: `${visualCapacityPct}%` }} />
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article className="nw-location-ops-card">
+              <div className="ops-card-head">
+                <span>주의 구간</span>
+                <em>재배치 우선순위</em>
+              </div>
+              <div className="ops-card-metrics">
+                <div>
+                  <strong>{formatNumber(locationDashboard.highUtilLocations.length)}</strong>
+                  <span>고적재 위치</span>
+                </div>
+                <div>
+                  <strong>{formatNumber(locationDashboard.highReservedLocations.length)}</strong>
+                  <span>미발송 집중 위치</span>
+                </div>
+                <div>
+                  <strong>{formatNumber(locationDashboard.emptyLocations.length)}</strong>
+                  <span>비어 있는 위치</span>
+                </div>
+              </div>
+              <p>
+                적재율 85% 이상 또는 미발송 비중이 높은 위치를 먼저 보면,
+                출고 병목과 공간 잠식을 빠르게 찾을 수 있습니다.
+              </p>
+            </article>
+
+            <article className="nw-location-ops-card accent">
+              <div className="ops-card-head">
+                <span>집중 구간</span>
+                <em>존 기준 집계</em>
+              </div>
+              {locationDashboard.topZone ? (
+                <>
+                  <div className="ops-zone-highlight">
+                    <strong>{locationDashboard.topZone.zone}</strong>
+                    <b>{formatNumber(locationDashboard.topZone.stock)}</b>
+                    <span>가장 많은 재고가 쌓인 존</span>
+                  </div>
+                  <div className="ops-zone-inline">
+                    <span>가용 {formatNumber(locationDashboard.topZone.available)}</span>
+                    <span>미발송 {formatNumber(locationDashboard.topZone.reserved)}</span>
+                    <span>평균 적재 {locationDashboard.topZone.avgUtil.toFixed(1)}%</span>
+                  </div>
+                </>
+              ) : (
+                <div className="nw-empty inline">집계할 존이 없습니다.</div>
+              )}
+              <p>
+                {locationDashboard.watchZone
+                  ? `${locationDashboard.watchZone.zone}은(는) 미발송 비중 ${locationDashboard.watchZone.reservedRatio.toFixed(1)}%로 관찰이 필요합니다.`
+                  : "관찰 대상 존이 없습니다."}
+              </p>
+            </article>
+          </section>
+
+          {locationDashboard.zoneSummaries.length ? (
+            <section className="nw-location-zone-strip">
+              {locationDashboard.zoneSummaries.map((item) => (
+                <article key={item.zone} className="nw-location-zone-card">
+                  <div className="zone-head">
+                    <strong>{item.zone}</strong>
+                    <em>{formatNumber(item.count)}개 위치</em>
+                  </div>
+                  <div className="zone-metrics">
+                    <span>재고 {formatNumber(item.stock)}</span>
+                    <span>가용 {formatNumber(item.available)}</span>
+                    <span>미발송 {formatNumber(item.reserved)}</span>
+                  </div>
+                  <div className="zone-bars">
+                    <div className="mini-bar">
+                      <i style={{ width: `${Math.min(100, Math.max(item.fillRatio, 0))}%` }} />
+                    </div>
+                    <div className="mini-bar reserved">
+                      <i style={{ width: `${Math.min(100, Math.max(item.reservedRatio, 0))}%` }} />
+                    </div>
+                  </div>
+                  <div className="zone-foot">
+                    <span>적재 {item.fillRatio.toFixed(1)}%</span>
+                    <span>미발송 {item.reservedRatio.toFixed(1)}%</span>
+                  </div>
+                </article>
+              ))}
+            </section>
+          ) : null}
+
           {selectedRows.length ? (
             <section className="nw-location-selection-visual simple">
               <article className="nw-location-kpi-card stock">
