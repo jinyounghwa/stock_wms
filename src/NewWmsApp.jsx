@@ -912,6 +912,13 @@ function findProductByLookup(value, owner = "") {
   ));
 }
 
+function isCsvHeaderLine(line = "") {
+  const normalized = normalizeLookupValue(line).toLowerCase();
+  if (!normalized) return false;
+  return ["화주사", "owner", "location", "위치", "barcode", "바코드", "actual", "실제수량"]
+    .some((token) => normalized.includes(token));
+}
+
 function SidebarLayout({ title, children }) {
   return (
     <div className="nw-shell">
@@ -4858,6 +4865,11 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [actualQty, setActualQty] = useState("");
   const [reason, setReason] = useState("");
+  const [csvOwner, setCsvOwner] = useState("화주사 2");
+  const [csvBatchName, setCsvBatchName] = useState("2026-03 창고별 일괄 조정");
+  const [csvUploadText, setCsvUploadText] = useState("WHO1-A01-01-01,880123456789,147,파손 3개 제외\nWHO1-B02-01-01,880987654321,205,집계 오차 보정");
+  const [csvPreview, setCsvPreview] = useState([]);
+  const [csvImportedFile, setCsvImportedFile] = useState("");
 
   const [historyFilter, setHistoryFilter] = useState({
     status: "ALL",
@@ -4867,6 +4879,26 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState("");
   const [detailEdit, setDetailEdit] = useState({ actualQty: "", reason: "" });
+
+  const createAdjustmentRecord = ({ targetOwner, product, location, targetActualQty, targetReason, worker = "김작업", source = "", batchName = "" }) => ({
+    id: `adj-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    requestedAt: getNowString(),
+    owner: targetOwner,
+    worker,
+    productName: product.name,
+    option: product.option,
+    barcode: product.barcode,
+    brand: product.brand,
+    zone: location.zone || product.zone || "-",
+    locationCode: location.locationCode,
+    systemQty: toNumber(product.systemQty),
+    actualQty: toNumber(targetActualQty),
+    reason: targetReason.trim(),
+    status: "대기중",
+    approvedAt: "",
+    source,
+    batchName,
+  });
 
   const locationKeyword = locationQuery.trim().toLowerCase();
   const hasLocationScan = locationKeyword.length > 0;
@@ -5012,6 +5044,95 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
   const adjustmentQty = selectedProduct ? toNumber(actualQty) - selectedProduct.systemQty : 0;
   const canSubmitRequest = !!selectedProduct && !!effectiveLocation && actualQty !== "" && adjustmentQty !== 0;
 
+  const resolveCsvPreviewRow = ({ rowIndex, targetOwner, locationCode, barcode, actualQty: rawActualQty, reason: rawReason }) => {
+    const normalizedOwner = normalizeLookupValue(targetOwner) || csvOwner;
+    const normalizedLocationCode = normalizeLookupValue(locationCode);
+    const normalizedBarcode = normalizeLookupValue(barcode);
+    const targetActualQty = toNumber(rawActualQty);
+    const base = {
+      index: rowIndex,
+      owner: normalizedOwner,
+      locationCode: normalizedLocationCode,
+      barcode: normalizedBarcode,
+      actualQty: targetActualQty,
+      reason: normalizeLookupValue(rawReason),
+      valid: false,
+      error: "",
+      productName: "-",
+      option: "-",
+      brand: "-",
+      zone: "-",
+      systemQty: 0,
+      diffQty: 0,
+      tone: "dark",
+    };
+
+    if (!normalizedOwner || !normalizedLocationCode || !normalizedBarcode || rawActualQty === "") {
+      return { ...base, error: "화주사/위치코드/바코드/실제수량이 필요합니다." };
+    }
+
+    const product = findProductByBarcode(normalizedBarcode, normalizedOwner);
+    if (!product) {
+      return { ...base, error: "해당 화주사의 바코드를 찾을 수 없습니다." };
+    }
+
+    const normalizedLocationKey = normalizedLocationCode.toLowerCase();
+    const stockLocation = LOCATION_STOCK_ROWS.find((row) => (
+      row.owner === normalizedOwner && row.locationCode.toLowerCase() === normalizedLocationKey
+    ));
+    const productLocation = product.locations.find((location) => location.code.toLowerCase() === normalizedLocationKey);
+
+    if (!stockLocation && !productLocation) {
+      return {
+        ...base,
+        productName: product.name,
+        option: product.option,
+        brand: product.brand,
+        tone: product.tone,
+        error: "위치코드를 확인할 수 없습니다.",
+      };
+    }
+
+    const systemQty = productLocation ? toNumber(productLocation.qty) : 0;
+    const zone = productLocation?.zone || stockLocation?.zone || "-";
+    const diffQty = targetActualQty - systemQty;
+    if (diffQty === 0) {
+      return {
+        ...base,
+        productName: product.name,
+        option: product.option,
+        brand: product.brand,
+        tone: product.tone,
+        zone,
+        systemQty,
+        diffQty,
+        error: "조정 수량이 0입니다.",
+      };
+    }
+
+    return {
+      ...base,
+      valid: true,
+      productName: product.name,
+      option: product.option,
+      brand: product.brand,
+      tone: product.tone,
+      zone,
+      systemQty,
+      diffQty,
+    };
+  };
+
+  const csvSummary = useMemo(() => {
+    const validRows = csvPreview.filter((row) => row.valid);
+    return {
+      total: csvPreview.length,
+      valid: validRows.length,
+      invalid: csvPreview.length - validRows.length,
+      diffQty: validRows.reduce((sum, row) => sum + row.diffQty, 0),
+    };
+  }, [csvPreview]);
+
   const copyProductCode = async (productCode) => {
     const copied = await copyToClipboard(productCode);
     showToast(copied ? "상품코드가 복사되었습니다." : "상품코드 복사에 실패했습니다.");
@@ -5034,29 +5155,94 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
       return;
     }
 
-    const created = {
-      id: `adj-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      requestedAt: getNowString(),
-      owner,
-      worker: "김작업",
-      productName: selectedProduct.name,
-      option: selectedProduct.option,
-      barcode: selectedProduct.barcode,
-      brand: selectedProduct.brand,
-      zone: effectiveLocation.zone || selectedProduct.zone || "-",
-      locationCode: effectiveLocation.locationCode,
-      systemQty: selectedProduct.systemQty,
-      actualQty: toNumber(actualQty),
-      reason: reason.trim(),
-      status: "대기중",
-      approvedAt: "",
-    };
+    const created = createAdjustmentRecord({
+      targetOwner: owner,
+      product: selectedProduct,
+      location: effectiveLocation,
+      targetActualQty: actualQty,
+      targetReason: reason,
+      source: "개별조정",
+    });
 
     setAdjustments((prev) => [created, ...prev]);
     setActualQty("");
     setReason("");
     showToast("재고 조정 요청을 생성했습니다.");
     setSubTab("history");
+  };
+
+  const parseCsvPreview = () => {
+    const rawLines = csvUploadText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const lines = rawLines.filter((line, index) => !(index === 0 && isCsvHeaderLine(line)));
+
+    const parsed = lines.map((line, index) => {
+      const columns = line.split(",").map((item) => item.trim());
+      const withOwner = columns.length >= 5;
+      return resolveCsvPreviewRow({
+        rowIndex: index + 1,
+        targetOwner: withOwner ? columns[0] : csvOwner,
+        locationCode: withOwner ? columns[1] : columns[0],
+        barcode: withOwner ? columns[2] : columns[1],
+        actualQty: withOwner ? columns[3] : columns[2],
+        reason: withOwner ? columns.slice(4).join(",") : columns.slice(3).join(","),
+      });
+    });
+
+    setCsvPreview(parsed);
+    showToast(`CSV 검증 완료: 총 ${parsed.length}행 / 유효 ${parsed.filter((row) => row.valid).length}행`);
+  };
+
+  const applyCsvAdjustments = () => {
+    const validRows = csvPreview.filter((row) => row.valid);
+    if (!validRows.length) {
+      showToast("일괄 요청할 유효 행이 없습니다.");
+      return;
+    }
+
+    const batchName = csvBatchName.trim() || `${getNowString().slice(0, 10)} CSV 조정`;
+    const created = validRows.map((row, index) => createAdjustmentRecord({
+      targetOwner: row.owner,
+      product: {
+        name: row.productName,
+        option: row.option,
+        barcode: row.barcode,
+        brand: row.brand,
+        systemQty: row.systemQty,
+      },
+      location: {
+        zone: row.zone,
+        locationCode: row.locationCode,
+      },
+      targetActualQty: row.actualQty,
+      targetReason: row.reason,
+      worker: "김작업",
+      source: "CSV일괄조정",
+      batchName: `${batchName}-${String(index + 1).padStart(2, "0")}`,
+    }));
+
+    setAdjustments((prev) => [...created, ...prev]);
+    showToast(`CSV 일괄 조정 ${created.length}건을 생성했습니다.`);
+    setSubTab("history");
+  };
+
+  const importCsvFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      setCsvUploadText(text);
+      setCsvImportedFile(file.name);
+      setCsvPreview([]);
+      showToast(`${file.name} 파일을 불러왔습니다.`);
+    } catch (error) {
+      showToast("CSV 파일을 읽지 못했습니다.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const historyRows = useMemo(() => adjustments
@@ -5125,6 +5311,7 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
     <>
       <div className="nw-subtabs survey-subtabs">
         <button type="button" className={subTab === "request" ? "active" : ""} onClick={() => setSubTab("request")}>조정하기</button>
+        <button type="button" className={subTab === "csv" ? "active" : ""} onClick={() => setSubTab("csv")}>CSV 일괄 조정</button>
         <button type="button" className={subTab === "history" ? "active" : ""} onClick={() => setSubTab("history")}>조정내역</button>
       </div>
 
@@ -5288,6 +5475,151 @@ function WorkerAdjustmentPanel({ adjustments, setAdjustments, showToast }) {
                 </div>
               ) : null}
           </>
+        </section>
+      ) : null}
+
+      {subTab === "csv" ? (
+        <section className="nw-panel nw-adjust-bulk-panel">
+          <div className="nw-adjust-bulk-hero">
+            <div>
+              <h3>CSV 일괄 조정</h3>
+              <p>창고별 위치 재고를 CSV로 검증한 뒤 대기 요청으로 일괄 생성합니다.</p>
+            </div>
+            <div className="nw-helper-text">기본 컬럼: 위치코드, 바코드, 실제수량, 사유</div>
+          </div>
+
+          <div className="nw-filter-grid nw-adjust-bulk-top">
+            <label>
+              기본 화주사
+              <select value={csvOwner} onChange={(event) => setCsvOwner(event.target.value)}>
+                {OWNER_OPTIONS.filter((option) => option !== "ALL").map((option) => <option key={option}>{option}</option>)}
+              </select>
+            </label>
+            <label>
+              일괄 작업명
+              <input value={csvBatchName} onChange={(event) => setCsvBatchName(event.target.value)} placeholder="2026-03 창고별 일괄 조정" />
+            </label>
+          </div>
+
+          <div className="nw-adjust-bulk-grid">
+            <section className="nw-adjust-bulk-card">
+              <div className="nw-panel-title-row">
+                <h4>업로드 또는 붙여넣기</h4>
+                <div className="nw-btn-row">
+                  <label className="nw-btn">
+                    CSV 파일 선택
+                    <input type="file" accept=".csv,text/csv" hidden onChange={importCsvFile} />
+                  </label>
+                  <button type="button" className="nw-btn" onClick={() => {
+                    setCsvUploadText("WHO1-A01-01-01,880123456789,147,파손 3개 제외\nWHO1-B02-01-01,880987654321,205,집계 오차 보정");
+                    setCsvImportedFile("");
+                    setCsvPreview([]);
+                  }}
+                  >
+                    샘플 채우기
+                  </button>
+                </div>
+              </div>
+              <div className="nw-helper-text">파일 첫 줄에 헤더를 넣어도 됩니다. 화주사 컬럼이 없으면 상단 기본 화주사를 사용합니다.</div>
+              {csvImportedFile ? <div className="nw-adjust-bulk-file">불러온 파일: {csvImportedFile}</div> : null}
+              <textarea
+                className="nw-adjust-bulk-textarea"
+                value={csvUploadText}
+                onChange={(event) => setCsvUploadText(event.target.value)}
+                placeholder={"WHO1-A01-01-01,880123456789,147,파손 3개 제외\nWHO1-B02-01-01,880987654321,205,집계 오차 보정"}
+              />
+              <div className="nw-adjust-bulk-columns">
+                <span>지원 컬럼 순서</span>
+                <div className="chips">
+                  <em>화주사(선택)</em>
+                  <em>위치코드</em>
+                  <em>바코드</em>
+                  <em>실제수량</em>
+                  <em>사유</em>
+                </div>
+              </div>
+              <div className="nw-btn-row end">
+                <button type="button" className="nw-btn primary" onClick={parseCsvPreview}>검증하기</button>
+              </div>
+            </section>
+
+            <section className="nw-adjust-bulk-card">
+              <h4>검증 요약</h4>
+              <div className="nw-summary-grid four nw-adjust-bulk-summary">
+                <article className="nw-summary-card">
+                  <div className="label">총 행 수</div>
+                  <strong>{formatNumber(csvSummary.total)}</strong>
+                  <span>붙여넣기 또는 파일 기준</span>
+                </article>
+                <article className="nw-summary-card">
+                  <div className="label">유효 요청</div>
+                  <strong>{formatNumber(csvSummary.valid)}</strong>
+                  <span>대기 요청 생성 가능</span>
+                </article>
+                <article className="nw-summary-card warn">
+                  <div className="label">오류 행</div>
+                  <strong>{formatNumber(csvSummary.invalid)}</strong>
+                  <span>바코드/위치/수량 재확인</span>
+                </article>
+                <article className="nw-summary-card">
+                  <div className="label">총 조정 수량</div>
+                  <strong className={csvSummary.diffQty > 0 ? "text-plus" : csvSummary.diffQty < 0 ? "text-minus" : ""}>
+                    {csvSummary.diffQty > 0 ? `+${formatNumber(csvSummary.diffQty)}` : formatNumber(csvSummary.diffQty)}
+                  </strong>
+                  <span>유효 행 합계</span>
+                </article>
+              </div>
+              <ul className="nw-adjust-bulk-rules">
+                <li>위치코드는 현재 화주사 기준 창고 위치와 일치해야 합니다.</li>
+                <li>전산수량이 없는 위치여도 상품이 맞으면 `0` 기준으로 조정 요청을 만들 수 있습니다.</li>
+                <li>조정 수량이 `0`인 행은 요청 대상에서 제외됩니다.</li>
+              </ul>
+              <div className="nw-btn-row end">
+                <button type="button" className="nw-btn primary" onClick={applyCsvAdjustments} disabled={!csvSummary.valid}>
+                  유효 행 일괄 요청
+                </button>
+              </div>
+            </section>
+          </div>
+
+          {csvPreview.length ? (
+            <div className="nw-table-wrap">
+              <table className="nw-table">
+                <thead>
+                  <tr>
+                    <th>행</th>
+                    <th>화주사</th>
+                    <th>위치</th>
+                    <th>상품</th>
+                    <th>바코드</th>
+                    <th>전산</th>
+                    <th>실제</th>
+                    <th>조정</th>
+                    <th>사유</th>
+                    <th>검증</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvPreview.map((row) => (
+                    <tr key={`csv-preview-${row.index}`} className={row.valid ? "" : "nw-table-row-invalid"}>
+                      <td>{row.index}</td>
+                      <td>{row.owner}</td>
+                      <td>{row.zone} {row.locationCode}</td>
+                      <td>{row.productName}<br />{row.option}</td>
+                      <td>{row.barcode}</td>
+                      <td>{formatNumber(row.systemQty)}</td>
+                      <td>{formatNumber(row.actualQty)}</td>
+                      <td className={row.diffQty > 0 ? "text-plus" : row.diffQty < 0 ? "text-minus" : ""}>
+                        {row.diffQty > 0 ? `+${formatNumber(row.diffQty)}` : formatNumber(row.diffQty)}
+                      </td>
+                      <td>{row.reason || "-"}</td>
+                      <td>{row.valid ? <span className="nw-status ok">정상</span> : <span className="nw-status danger">오류</span>} {row.error ? `· ${row.error}` : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
